@@ -1,0 +1,227 @@
+syntax = "proto3";
+
+package ac.service.v1;
+
+import "google/api/annotations.proto";
+option java_multiple_files = true;
+option java_package = "account-center.api.v1";
+option go_package = "peach/api/account-center/service/v1;v1";
+import public "google/protobuf/timestamp.proto";
+
+
+service AccountCenter{
+  rpc SetAdmin(SetAdminRequest) returns (SetAdminReply){
+    option (google.api.http) = {
+      post :"/account-center/set-admin"
+      body : "*"
+    };
+  }
+  rpc SendEmailCode(SendEmailCodeRequest) returns (SendEmailCodeReply) {
+    option (google.api.http) = {
+      post: "/account-center/e-validate/"
+      body: "*"
+    };
+  }
+  rpc  Login (CommonLoginRequest) returns (CommonLoginReply) {
+    option (google.api.http) = {
+    post: "/account-center/common/login/"
+      body: "*"
+      };
+  }
+
+  rpc Logout(LogoutRequest) returns (LogoutReply) {
+    option (google.api.http) = {
+      get: "/account-center/logout/"
+    };
+  }
+
+  rpc Register (RegisterRequest) returns (RegisterReply) {
+    option (google.api.http) = {
+      post: "/account-center/common/register/"
+      body: "*"
+    };
+  }
+
+  rpc WXLogin (WXLoginRequest) returns (WXLoginReply){
+    option (google.api.http) ={
+      post:"/account-center/wx-login/"
+      body:"*"
+    };
+  }
+
+  rpc GetAccountInfo (GetAccountInfoRequest) returns (GetAccountInfoReply){
+    option (google.api.http) ={
+      get:"/account-center/account/info/{id}"
+    };
+  }
+
+  rpc PasswordReset (PasswordResetRequest) returns (PasswordResetReply){
+    option (google.api.http) ={
+      post:"/account-center/reset/"
+      body:"*"
+    };
+  }
+  rpc ListAccount (ListAccountRequest) returns (ListAccountReply){
+    option (google.api.http) ={
+      get:"/account-center/list/"
+    };
+  }
+
+  rpc UpdateAccountInfo (UpdateAccountInfoRequest) returns (UpdateAccountInfoReply){
+    option (google.api.http) ={
+      post:"/account-center/update/"
+      body:"*"
+    };
+  }
+
+  rpc GetPorn (GetPornRequest) returns (GetPornReply){
+    option (google.api.http) ={
+      get:"/account-center/common/porn/"
+    };
+  }
+
+  rpc GetGuest (GetGuestRequest) returns (GetGuestReply) {
+    option (google.api.http) = {
+      get:"/account-center/common/guest"
+    };
+  }
+  //  rpc MobileLogin(MobileLoginRequest) returns (MobileReply){
+//  }
+//
+//  rpc EmailLogin(EmailLoginRequest) returns (EmailReply){
+//  }
+
+}
+
+message SetAdminRequest {
+  int32 uid = 1;
+  int32 role = 2;
+}
+message SetAdminReply{
+  string message = 1;
+  bool   status = 2;
+}
+message LogoutRequest{
+
+}
+message LogoutReply{
+  string code = 1;
+  string message =2;
+  int32  id      =3;
+}
+message WXLoginRequest{
+  string code = 1;
+}
+message WXLoginReply{
+
+}
+
+message SendEmailCodeRequest{
+  string email = 1;
+  int32 type = 2;
+}
+message SendEmailCodeReply{
+  string message = 1;
+}
+message CommonLoginRequest {
+  string  user_num = 1;
+  string  telephone = 2;
+  string email    = 3;
+  string password = 4;
+}
+
+message CommonLoginReply {
+  string code = 1;
+  string message =2;
+  int32  id      =3;
+  string set_cookie = 4;
+}
+
+message RegisterRequest {
+  string username = 1;
+  string password = 2;
+  string invite_code = 3;
+  string telephone = 4;
+  string email = 5;
+  string porn = 6;
+}
+
+message RegisterReply {
+  string user_num = 1;
+}
+
+message PasswordResetRequest{
+  int32 id = 1;
+  string password = 2;
+  string validate = 3;
+}
+
+message PasswordResetReply{
+  int32 id = 1;
+}
+
+message ListAccountRequest{
+  int32 offset = 1;
+  int32 limit  = 2;
+}
+
+message ListAccountReply{
+  int32 total = 1;
+  message AccountInfo {
+    int64 id = 1;
+    string name = 2;
+    string avatar = 3;
+    int64 role = 4;
+    bool   is_vip = 5;
+    string telephone = 6;
+    string email = 7;
+    string register_time = 8;
+    string last_login_at = 9;
+  }
+  repeated AccountInfo data = 2;
+}
+
+message UpdateAccountInfoRequest {
+  int32  id = 1;
+  string name = 2;
+  string avatar = 3;
+  string email = 4;
+  string telephone = 5;
+}
+
+message UpdateAccountInfoReply{
+  int32 id = 1;
+}
+
+message GetPornRequest{
+}
+
+message GetPornReply {
+  string porn = 1;
+}
+
+message GetAccountInfoRequest{
+   int64 id = 1;
+}
+
+message GetAccountInfoReply {
+  int64 id = 1;
+  string name = 2;
+  string avatar = 3;
+  int64 role = 4;
+  bool   is_vip = 5;
+  string telephone = 6;
+  string email = 7;
+  string register_time = 8;
+  string last_login_at = 9;
+}
+
+
+message GetGuestRequest {
+
+}
+
+message GetGuestReply {
+  string gid = 1;
+  string token = 2;
+}

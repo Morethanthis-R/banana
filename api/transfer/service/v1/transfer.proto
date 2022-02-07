@@ -1,0 +1,226 @@
+syntax = "proto3";
+
+package tf.service.v1;
+
+option java_multiple_files = true;
+option java_package = "transfer.api.v1";
+option go_package = "peach/api/transfer/service/v1;v1";
+import public "google/protobuf/timestamp.proto";
+
+
+service Transfer{
+
+  rpc UploadEntry(ReqUpload) returns (RespUpload){
+
+  }
+
+  rpc DownLoadEntry(ReqDownload) returns (RespDownload){
+
+  }
+
+  rpc UploadStatic(ReqStatic) returns (RespStatic) {
+
+  }
+
+  rpc GetUserFileTree(ReqGetUserFileTree) returns(RespGetUserFileTree) {
+
+  }
+
+  rpc DeleteFile(ReqDeleteFile) returns(RespDelete) {
+
+  }
+  rpc DeleteDir(ReqDeleteDir) returns (RespDelete){
+
+  }
+
+  rpc ShareFileStr(ReqShareFileStr) returns (RespShareFileStr){
+
+  }
+
+  rpc PreviewFile(ReqPreviewFile) returns (RespPreviewFile) {
+
+  }
+  rpc FileCensus(ReqFileCensus) returns (RespFileCensus) {
+
+  }
+  rpc SearchFile(ReqSearchFile) returns (RespSearchFile) {
+
+  }
+  rpc GetUserTrashBin(ReqGetUserTrashBin) returns(RespGetUserTrashBin){
+
+  }
+
+  rpc CleanTrashFile(ReqCleanTrashFile) returns(RespCleanTrash){
+
+  }
+
+  rpc CleanTrashDir(ReqCleanTrashDir) returns(RespCleanTrash) {
+
+  }
+
+  rpc WithDrawFile(ReqWithDrawFile) returns (RespWithDraw){
+
+  }
+
+  rpc WithDrawDir(ReqWithDrawDir) returns(RespWithDraw){
+
+  }
+
+}
+
+message ReqWithDrawFile {
+  repeated int32 fid = 1;
+}
+message ReqWithDrawDir{
+  repeated int32 did = 2;
+}
+message RespWithDraw {
+  string message = 1;
+  bool   status = 2;
+}
+message ReqCleanTrashFile {
+  repeated int32 fid = 1;
+}
+message RespCleanTrash{
+  string message = 1;
+  bool   status = 2;
+}
+
+message ReqCleanTrashDir{
+  repeated int32 did = 1;
+}
+message ReqSearchFile {
+  string keyword  = 1;
+}
+
+message RespSearchFile {
+  string message = 1;
+  bool   status = 2;
+}
+message FileRatio{
+  int32 audio =1;
+  int32 video =2;
+  int32 image =3;
+  int32 doc   =4;
+  int32 other =5;
+}
+
+message DownloadCensus{
+  string file_name = 1;
+  int32 count = 2;
+}
+message Usage {
+  string  use_str = 1;
+  float  used = 2;
+}
+message ReqFileCensus{
+
+}
+
+message RespFileCensus{
+  Usage     usage = 1;
+  FileRatio file_ratio = 3;
+  repeated DownloadCensus top_ten =4; //若没有文件则返回空结构体
+}
+
+message ReqShareFileStr{
+  int32 fid = 1;
+}
+
+message RespShareFileStr{
+  int32 fid = 1;
+  string share_Str = 2;
+}
+
+message ReqPreviewFile{
+  int32 fid = 1;
+}
+message RespPreviewFile{
+  string preview_str = 1;
+}
+
+message File {
+  string filename = 1;
+  string content_type =2;
+  string fileHash = 3;
+}
+message ReqUpload {
+  File file = 1;
+  string directory = 2; //默认根目录  为"" 增加路径填写 /xxx/xxx
+}
+
+message RespUpload {
+  int32 fid = 1;
+}
+
+
+message ReqDownload {
+  int32 fid = 1;
+}
+
+message RespDownload {
+  string filename = 1;
+  bool  status = 2;
+  string message = 3;
+}
+
+message ReqStatic {
+  string filename = 1;
+  string content_type = 2;
+}
+
+message RespStatic {
+  string file_address = 1;
+}
+
+message ReqGetUserFileTree {
+  int32 sort_object = 1; //0:默认排序 1:文件名长短 2:编辑时间 4:文件大小
+  int32 sort_type = 2; //0:系统默认 1:asc升序  2:desc降序
+  string keywords =3; //搜索关键字
+  int32 directory_id = 4;
+}
+
+message FileMetaObject{
+  int32 fid = 1;
+  string size = 2;
+  string file_name = 3;
+  string file_type = 4;
+  int64  last_modified = 5;
+}
+
+message DirMetaObject{
+  int32 did = 1;
+  string size = 2;
+  string dir_name =3;
+  int64 last_modified = 5;
+}
+
+message RespGetUserFileTree {
+  int32 user_id = 1;
+  int32 total =2;
+  repeated FileMetaObject file_object = 3;
+  repeated DirMetaObject dir_object = 4;
+}
+
+message ReqGetUserTrashBin {
+  int32 sort_object = 1; //0:默认排序 1:文件名长短 2:编辑时间 4:文件大小
+  int32 sort_type = 2; //0:系统默认 1:asc升序  2:desc降序
+}
+
+message RespGetUserTrashBin {
+  int32 user_id = 1;
+  int32 total =2;
+  repeated FileMetaObject file_object = 3;
+  repeated DirMetaObject dir_object = 4;
+}
+message ReqDeleteFile {
+  repeated int32 fid = 1;
+}
+message ReqDeleteDir {
+  repeated int32 did = 1;
+}
+message RespDelete {
+  bool  status = 1;
+  string message = 2;
+}
+

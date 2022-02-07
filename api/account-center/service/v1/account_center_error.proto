@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package ac.service.v1;
+import "errors/errors.proto";
+
+option go_package = "peach/api/account-center/service/v1;v1";
+option java_multiple_files = true;
+option java_package = "account-center.v1.errors";
+option objc_class_prefix = "APIACErrors";
+
+enum AccountCenterErrorReason {
+    option (errors.default_code) = 500;
+
+    UNKNOWN_ERROR       = 0;
+    LOGIN_FAILED        = 1;
+    REGISTER_FAILED     = 2;
+    UNAUTHORIZED        =3;
+}
