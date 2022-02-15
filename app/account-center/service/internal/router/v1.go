@@ -22,7 +22,7 @@ func apiV1(group gin.IRoutes, ac *service.AccountCenterService) {
 	group.GET("/logout", LogoutHandler)
 	group.POST("/set-admin", SetAdminHandler)
 	group.GET("/account/info/:id", GetUserInfoHandler)
-	group.GET("/reset", ResetPassHandler)
+	group.POST("/reset", ResetPassHandler)
 	group.GET("/list",UserListHandler)
 	group.POST("/update",UpdateInfoHandler)
 }
@@ -63,8 +63,13 @@ func LoginHandler(c *gin.Context) {
 		response.NewErrWithCodeAndMsg(c,200,err.Error())
 		return
 	}
-	c.Header("Set-Cookie",res.SetCookie)
-	response.NewSuccess(c,res.Id)
+	//c.Header("Set-Cookie",res.SetCookie)
+	//type Return struct {
+	//	Id int 	`json:"id"`
+	//}
+	//idStruct := &Return{Id: 0}
+	//idStruct.Id = int(res.Id)
+	response.NewSuccess(c,res)
 }
 
 func LogoutHandler(c *gin.Context) {
@@ -121,7 +126,7 @@ func GetUserInfoHandler(c *gin.Context){
 	req.Id = int64(id)
 	res,err := accountService.GetAccountInfo(c,req)
 	if err != nil {
-		response.NewErrWithCodeAndMsg(c,200,response.BIND_JSON_ERROR)
+		response.NewErrWithCodeAndMsg(c,200,err.Error())
 		return
 	}
 	response.NewSuccess(c,res)
@@ -135,7 +140,7 @@ func UpdateInfoHandler(c *gin.Context){
 	}
 	res,err := accountService.UpdateAccountInfo(c,req)
 	if err != nil {
-		response.NewErrWithCodeAndMsg(c,200,response.BIND_JSON_ERROR)
+		response.NewErrWithCodeAndMsg(c,200,err.Error())
 		return
 	}
 	response.NewSuccess(c,res)

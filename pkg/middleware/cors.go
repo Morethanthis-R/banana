@@ -46,7 +46,7 @@ func Cors() gin.HandlerFunc {
 		var filterHost = [...]string{"http://localhost.*"}
 		// filterHost 做过滤器，防止不合法的域名访问
 		var isAccess = false
-		for _, v := range(filterHost) {
+		for _, v := range filterHost {
 			match, _ := regexp.MatchString(v, origin)
 			if match {
 				isAccess = true
@@ -55,7 +55,7 @@ func Cors() gin.HandlerFunc {
 		if isAccess {
 			// 核心处理方式
 			c.Header("Access-Control-Allow-Origin", origin)
-			c.Header("Access-Control-Allow-Headers", "Content-Type,AccessToken,X-CSRF-Token, Authorization, Token")
+			c.Header("Access-Control-Allow-Headers", "Set-Cookie,Content-Type,AccessToken,X-CSRF-Token, Authorization, Token")
 			c.Header("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
 			c.Header("Access-Control-Expose-Headers", "Set-Cookie, Content-Length, Access-Control-Allow-Origin, Access-Control-Allow-Headers, Content-Type")
 			c.Header("Access-Control-Allow-Credentials", "true")
@@ -63,7 +63,7 @@ func Cors() gin.HandlerFunc {
 		}
 		//放行所有OPTIONS方法
 		if method == "OPTIONS" {
-			c.Header("Access-Control-Max-Age","1728000")
+			c.Header("Access-Control-Max-Age", "1728000")
 			c.JSON(h1.StatusOK, "Options Request!")
 			return
 		}

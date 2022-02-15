@@ -5,7 +5,7 @@ package ac.service.v1;
 import "google/api/annotations.proto";
 option java_multiple_files = true;
 option java_package = "account-center.api.v1";
-option go_package = "peach/api/account-center/service/v1;v1";
+option go_package = "banana/api/account-center/service/v1;v1";
 import public "google/protobuf/timestamp.proto";
 
 
@@ -152,8 +152,9 @@ message RegisterReply {
 
 message PasswordResetRequest{
   int32 id = 1;
-  string password = 2;
-  string validate = 3;
+  string old_pass = 2;
+  string new_pass = 3;
+  string validate = 4;
 }
 
 message PasswordResetReply{
@@ -172,7 +173,7 @@ message ListAccountReply{
     string name = 2;
     string avatar = 3;
     int64 role = 4;
-    bool   is_vip = 5;
+    int32   is_vip = 5;
     string telephone = 6;
     string email = 7;
     string register_time = 8;
@@ -187,6 +188,7 @@ message UpdateAccountInfoRequest {
   string avatar = 3;
   string email = 4;
   string telephone = 5;
+  string signature = 6;
 }
 
 message UpdateAccountInfoReply{
@@ -209,11 +211,12 @@ message GetAccountInfoReply {
   string name = 2;
   string avatar = 3;
   int64 role = 4;
-  bool   is_vip = 5;
+  int32   is_vip = 5;
   string telephone = 6;
   string email = 7;
-  string register_time = 8;
-  string last_login_at = 9;
+  string signature = 8;
+  string register_time = 9;
+  string last_login_at = 10;
 }
 
 

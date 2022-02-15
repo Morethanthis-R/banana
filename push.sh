@@ -9,3 +9,6 @@ docker push registry.cn-shenzhen.aliyuncs.com/morethanthis/peach:transfer-v1
 
 docker build -t registry.cn-shenzhen.aliyuncs.com/morethanthis/peach:account_center-v1 .
 docker push registry.cn-shenzhen.aliyuncs.com/morethanthis/peach:account_center-v1
+
+docker build -t registry.cn-shenzhen.aliyuncs.com/morethanthis/banana:account_center-v1 .
+docker push registry.cn-shenzhen.aliyuncs.com/morethanthis/banana:account_center-v1

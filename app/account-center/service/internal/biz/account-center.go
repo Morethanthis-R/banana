@@ -10,16 +10,17 @@ type User struct {
 	ID           int    `gorm:"primary_key" json:"id"`
 	UserNum      string `gorm:"type:varchar(10) not null" json:"user_num"`
 	Name         string `gorm:"type:varchar(20) not null" json:"name"`
-	Telephone    string `gorm:"type:varchar(14) not null" json:"telephone"`
+	Telephone    string `gorm:"type:varchar(14) ;default:'00000000000'" json:"telephone"`
 	Email        string `gorm:"type:varchar(30) not null" json:"email"`
 	Password     string `gorm:"type:varchar(256);default:'' not null" json:"password"`
-	Avatar       string `gorm:"type:varchar(256)" json:"avatar"`
-	IsVip        bool   `gorm:"default:0" json:"is_vip"`
+	Avatar       string `gorm:"type:varchar(256);default:'https://c-ssl.duitang.com/uploads/item/201409/09/20140909222840_KHPij.jpeg'" json:"avatar"`
+	IsVip        int8   `gorm:"default:0" json:"is_vip"`
 	Role         int8   `gorm:"type:tinyint(5);default:1" json:"role"`
 	Status       int    `gorm:"type:tinyint(5)" json:"status"` // 0 禁用  1可用
 	Porn         string `gorm:"type:varchar(6)" json:"porn"`   //邀请码
-	LastLoginAt  string `gorm:"type:varchar(30)" json:"last_login_at"`
-	RegisterTime string `gorm:"type:varchar(30)" json:"register_time"`
+	Signature    string `gorm:"type:varchar(256);default:'#'" json:"signature"`
+	LastLoginAt  string `gorm:"type:varchar(30);default:'#'" json:"last_login_at"`
+	RegisterTime string `gorm:"type:varchar(30);default:'#'" json:"register_time"`
 	CreatedAt    int64  `gorm:"autoCreateAt" json:"created_at"`
 	UpdatedAt    int64  `gorm:"autoUpdateAt" json:"updated_at"`
 }

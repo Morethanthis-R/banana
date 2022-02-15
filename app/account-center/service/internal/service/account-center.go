@@ -50,7 +50,7 @@ func (s *AccountCenterService) GetAccountInfo(ctx context.Context, req *pb.GetAc
 }
 func (s *AccountCenterService) PasswordReset(ctx context.Context, req *pb.PasswordResetRequest) (*pb.PasswordResetReply, error) {
 
-	return &pb.PasswordResetReply{}, nil
+	return s.ac.ResetPass(ctx,req)
 }
 func (s *AccountCenterService) ListAccount(ctx context.Context, req *pb.ListAccountRequest) (*pb.ListAccountReply, error) {
 	return s.ac.GetList(ctx, req)

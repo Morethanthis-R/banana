@@ -4,7 +4,7 @@ package tf.service.v1;
 
 option java_multiple_files = true;
 option java_package = "transfer.api.v1";
-option go_package = "peach/api/transfer/service/v1;v1";
+option go_package = "banana/api/transfer/service/v1;v1";
 import public "google/protobuf/timestamp.proto";
 
 

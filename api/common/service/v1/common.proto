@@ -1,0 +1,149 @@
+syntax = "proto3";
+
+package common.service.v1;
+
+option java_multiple_files = true;
+option java_package = "transfer.api.v1";
+option go_package = "banana/api/common/service/v1;v1";
+import public "google/protobuf/timestamp.proto";
+
+
+service Common{
+
+  rpc CreateNotify(ReqCreateNotify) returns (RespCreateNotify){
+
+  }
+
+  rpc DeleteNotify(ReqDeleteNotify) returns (RespDeleteNotify){
+
+  }
+
+  rpc GetNotifyList(ReqGetNotifyList) returns (RespGetNotifyList){
+
+  }
+
+  rpc GetNotifyObject(ReqGetNotifyObject) returns (RespGetNotifyObject){
+
+  }
+
+  rpc CreateNotifyType(ReqCreateNotifyType) returns (RespCreateNotifyType){
+
+  }
+
+  rpc UpdateNotifyType(ReqUpdateNotifyType) returns (RespUpdateNotifyType){
+
+  }
+
+  rpc DeleteNotifyType(ReqDeleteNotifyType) returns (RespDeleteNotifyType){
+
+  }
+
+  rpc GetNotifyTypeList(ReqGetNotifyTypeList) returns (RespGetNotifyTypeList){
+
+  }
+
+//  rpc CreateOrder(ReqCreateOrder) returns (RespCreateOrder){
+//
+//  }
+//  rpc UnifiedOrder() returns(){
+//
+//  }
+//  rpc GetOrderList(ReqGetOrderList) returns (RespGetOrderList) {
+//
+//  }
+//
+//  rpc CreatePayment(ReqCreatePayment) returns (RespCreatePayment){
+//
+//  }
+
+}
+
+message ReqCreateNotify {
+  string title =1;
+  string body =2;
+  int64 send_time =3; //默认即时发送
+  int32 uid = 4;
+  int32 is_global = 5;
+  repeated int32 notify_type = 6;
+}
+
+message RespCreateNotify {
+  int32 nid = 1;
+}
+
+message ReqDeleteNotify {
+  repeated int32 nids = 1;
+}
+
+message RespDeleteNotify{
+  bool status = 1;
+}
+
+message ReqGetNotifyList{
+  int32 sort_object = 1; //0:默认排序 1:编辑时间
+  int32 sort_type = 2; //0:系统默认 1:asc升序  2:desc降序
+  string keywords =3; //搜索关键字
+  int32 uid =4;
+  int32 offset =5;
+  int32 limit = 6;
+}
+
+message NotifyObject{
+  string title = 1;
+  string body = 2;
+  string  type = 3;
+  int64  send_time = 4;
+  int32 nid = 5;
+}
+message RespGetNotifyList{
+  repeated NotifyObject notify_objects = 1;
+}
+
+message ReqGetNotifyObject{
+  int32 nid = 1;
+}
+
+message RespGetNotifyObject{
+  NotifyObject notify = 1;
+}
+
+message ReqCreateNotifyType{
+  string name = 1;
+  string describe = 2;
+}
+
+message RespCreateNotifyType{
+  int32 tid = 1;
+}
+
+message ReqUpdateNotifyType {
+  int32 tid = 1;
+  string name = 2;
+  string describe = 3;
+}
+
+message RespUpdateNotifyType {
+  int32 tid = 1;
+}
+
+message ReqDeleteNotifyType{
+  repeated int32 tids = 1;
+}
+
+message RespDeleteNotifyType{
+  bool status = 1;
+}
+
+message TypeObject {
+  int32 tid = 1;
+  string name = 2;
+  string describe = 3;
+  int64  update_at = 4;
+}
+message ReqGetNotifyTypeList{
+
+}
+
+message RespGetNotifyTypeList{
+  repeated TypeObject type_objects = 1;
+}

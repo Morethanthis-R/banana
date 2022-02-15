@@ -9,7 +9,6 @@ import (
 	"banana/pkg/util"
 	"context"
 	"fmt"
-	"github.com/go-kratos/kratos/v2/errors"
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/go-kratos/kratos/v2/transport"
 	"reflect"
@@ -54,9 +53,42 @@ func (a *accountCenterRepo) SetAdmin(ctx context.Context, b *pb.SetAdminRequest)
 	return res, nil
 }
 
+func (a *accountCenterRepo) ResetPass(ctx context.Context, rq *pb.PasswordResetRequest) (*pb.PasswordResetReply, error) {
+	res := &pb.PasswordResetReply{}
+	u := &biz.User{}
+	if claims, exist := ctx.Value("claims").(*middleware.Claims); !exist {
+		return res, ecode.EXTERNAL_API_NO_RESPONSE.SetMessage("断言失败")
+	} else if claims.UserId != int(rq.Id) || claims.UserRole != 127 {
+		return res, ecode.EXTERNAL_API_NO_RESPONSE.SetMessage("非管理员禁止操作")
+	}
+	err := a.data.db.Model(&biz.User{}).Where("id = ?", rq.Id).First(u).Error
+
+	if !util.CheckPasswordHash(rq.OldPass, u.Password) {
+		return res, ecode.AUTH_FAIL.SetMessage("原密码错误")
+	}
+	key := fmt.Sprintf("%s:%s:%s", "email", "reset",u.Email)
+	redisCli := a.data.cache
+	code, err := redisCli.Get(ctx, key).Result()
+	if err != nil {
+		return res, ecode.REDIS_ERR
+	}
+	if strings.Compare(rq.GetValidate(), code) != 0 {
+		return res, ecode.PERMISSION_DENIED.SetMessage("验证码校验不符")
+	}
+
+	newPass, _ := util.HashPassword(rq.GetNewPass())
+	u.Password = newPass
+	err = a.data.db.Model(&biz.User{}).WithContext(ctx).Where("id = ?", rq.Id).Save(u).Error
+	if err != nil {
+		return res, ecode.MYSQL_ERR.SetMessage(err.Error())
+	}
+	res.Id = rq.Id
+	return res, nil
+}
+
 func (a *accountCenterRepo) SendEmailCode(ctx context.Context, rq *pb.SendEmailCodeRequest) (bool, error) {
 	if !util.CheckMailFormat(rq.GetEmail()) {
-		return false, errors.New(200, "请正确填写邮箱", "")
+		return false, ecode.INVALID_DATE_PARAM.SetMessage( "请正确填写邮箱")
 	}
 	code := util.GetRandomString(6)
 	redisCli := a.data.cache
@@ -86,8 +118,8 @@ func (a *accountCenterRepo) SendEmailCode(ctx context.Context, rq *pb.SendEmailC
 		return true, ecode.OK
 
 	case 2: //重置验证
-		key := fmt.Sprintf("%s:%s", "email", "reset")
-		_, err := redisCli.Do(ctx, "set", key, code, 60*5).Result()
+		key := fmt.Sprintf("%s:%s:%s", "email", "reset",rq.Email)
+		_, err := redisCli.Set(ctx, key, code, 5*time.Minute).Result()
 		if err != nil {
 			return false, ecode.REDIS_ERR
 		}
@@ -151,6 +183,9 @@ func (a *accountCenterRepo) Get(ctx context.Context, u *pb.GetAccountInfoRequest
 		return res, ecode.EXTERNAL_API_NO_RESPONSE.SetMessage("非管理员禁止操作")
 	}
 	err := a.data.db.Model(&biz.User{}).WithContext(ctx).Where("id = ?", u.Id).First(res).Error
+	if err != nil{
+		return res,ecode.MYSQL_ERR.SetMessage(err.Error())
+	}
 	return res, err
 }
 
@@ -166,7 +201,7 @@ func (a *accountCenterRepo) GetList(ctx context.Context, u *pb.ListAccountReques
 	}
 
 	var count int64
-	err := a.data.db.Model(&biz.User{}).WithContext(ctx).
+	err := a.data.db.Model(&biz.User{}).
 		Offset(int(u.Offset)).Limit(int(u.Limit)).Count(&count).
 		Order("id asc").
 		Find(&arr).Error
@@ -182,6 +217,7 @@ const accountCookieID = "account:cookie:id:%d"
 
 func (a *accountCenterRepo) Login(ctx context.Context, l *pb.CommonLoginRequest) (*pb.CommonLoginReply, error) {
 	res := &pb.CommonLoginReply{}
+	res.Id = 0
 	type login struct {
 		UserNum   string `json:"user_num"`
 		Telephone string `json:"telephone"`
@@ -262,15 +298,15 @@ func (a *accountCenterRepo) Update(ctx context.Context, b *pb.UpdateAccountInfoR
 	} else if claims.UserId != int(b.Id) || claims.UserRole != 127 {
 		return 0, ecode.EXTERNAL_API_NO_RESPONSE.SetMessage("非管理员禁止操作")
 	}
-	err = a.data.db.Model(&biz.User{}).WithContext(ctx).Where("id = ?", b.Id).First(u).Error
+	err = a.data.db.Model(&biz.User{}).Where("id = ?", b.Id).First(u).Error
 	if err != nil {
 		return 0, ecode.MYSQL_ERR.SetMessage(err.Error())
 	}
 	u.Name = b.Name
 	u.Telephone = b.Telephone
 	u.Avatar = b.Avatar
-	u.Email = b.Email
-	err = a.data.db.Model(&biz.User{}).WithContext(ctx).Save(&u).Error
+	u.Signature = b.Signature
+	err = a.data.db.Model(&biz.User{}).WithContext(ctx).Where("id = ?",b.Id).Save(u).Error
 	if err != nil {
 		return 0, ecode.MYSQL_ERR.SetMessage(err.Error())
 	}
@@ -291,26 +327,7 @@ func (a *accountCenterRepo) Logout(ctx context.Context) (id int, err error) {
 	return id, err
 }
 
-func (a *accountCenterRepo) ResetPass(ctx context.Context, rq *pb.PasswordResetRequest) (*pb.PasswordResetReply, error) {
-	res := &pb.PasswordResetReply{}
-	key := fmt.Sprintf("%s:%s", "email", "reset")
-	redisCli := a.data.cache
-	code, err := redisCli.Get(ctx, key).Result()
-	if err != nil {
-		return res, ecode.REDIS_ERR
-	}
-	if strings.Compare(rq.GetValidate(), code) != 0 {
-		return res, ecode.PERMISSION_DENIED.SetMessage("验证码校验不符")
-	}
 
-	newPass, _ := util.HashPassword(rq.GetPassword())
-	err = a.data.db.Model(&biz.User{}).WithContext(ctx).Where("id = ?", rq.GetId()).Update("password", newPass).Error
-	if err != nil {
-		return res, ecode.MYSQL_ERR
-	}
-	res.Id = rq.Id
-	return res, nil
-}
 
 func (a *accountCenterRepo) GetGuest(ctx context.Context, u *pb.GetGuestRequest) (*pb.GetGuestReply, error) {
 	res := &pb.GetGuestReply{}
@@ -319,7 +336,7 @@ func (a *accountCenterRepo) GetGuest(ctx context.Context, u *pb.GetGuestRequest)
 	randId := util.GetRandomString(16)
 	userName := fmt.Sprintf("Guest-%s", guest)
 	token, _ := middleware.GenerateToken(0, middleware.RoleGuest, userName, guest, randId, middleware.GuestExpire)
-	_, err := a.data.cache.Do(ctx, "set", key, randId, 3600*2).Result()
+	_, err := a.data.cache.Set(ctx,  key, randId, 3600*2).Result()
 	if err != nil {
 		return res, ecode.REDIS_ERR
 	}
