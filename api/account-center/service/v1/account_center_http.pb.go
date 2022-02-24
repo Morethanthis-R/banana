@@ -18,6 +18,7 @@ var _ = binding.EncodeURL
 const _ = http.SupportPackageIsVersion1
 
 type AccountCenterHTTPServer interface {
+	ForgetPass(context.Context, *ForgetPassRequest) (*ForgetPassReply, error)
 	GetAccountInfo(context.Context, *GetAccountInfoRequest) (*GetAccountInfoReply, error)
 	GetGuest(context.Context, *GetGuestRequest) (*GetGuestReply, error)
 	GetPorn(context.Context, *GetPornRequest) (*GetPornReply, error)
@@ -46,6 +47,7 @@ func RegisterAccountCenterHTTPServer(s *http.Server, srv AccountCenterHTTPServer
 	r.POST("/account-center/update/", _AccountCenter_UpdateAccountInfo0_HTTP_Handler(srv))
 	r.GET("/account-center/common/porn/", _AccountCenter_GetPorn0_HTTP_Handler(srv))
 	r.GET("/account-center/common/guest", _AccountCenter_GetGuest0_HTTP_Handler(srv))
+	r.GET("/account-center/forget", _AccountCenter_ForgetPass0_HTTP_Handler(srv))
 }
 
 func _AccountCenter_SetAdmin0_HTTP_Handler(srv AccountCenterHTTPServer) func(ctx http.Context) error {
@@ -279,7 +281,27 @@ func _AccountCenter_GetGuest0_HTTP_Handler(srv AccountCenterHTTPServer) func(ctx
 	}
 }
 
+func _AccountCenter_ForgetPass0_HTTP_Handler(srv AccountCenterHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in ForgetPassRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, "/ac.service.v1.AccountCenter/ForgetPass")
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.ForgetPass(ctx, req.(*ForgetPassRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*ForgetPassReply)
+		return ctx.Result(200, reply)
+	}
+}
+
 type AccountCenterHTTPClient interface {
+	ForgetPass(ctx context.Context, req *ForgetPassRequest, opts ...http.CallOption) (rsp *ForgetPassReply, err error)
 	GetAccountInfo(ctx context.Context, req *GetAccountInfoRequest, opts ...http.CallOption) (rsp *GetAccountInfoReply, err error)
 	GetGuest(ctx context.Context, req *GetGuestRequest, opts ...http.CallOption) (rsp *GetGuestReply, err error)
 	GetPorn(ctx context.Context, req *GetPornRequest, opts ...http.CallOption) (rsp *GetPornReply, err error)
@@ -300,6 +322,19 @@ type AccountCenterHTTPClientImpl struct {
 
 func NewAccountCenterHTTPClient(client *http.Client) AccountCenterHTTPClient {
 	return &AccountCenterHTTPClientImpl{client}
+}
+
+func (c *AccountCenterHTTPClientImpl) ForgetPass(ctx context.Context, in *ForgetPassRequest, opts ...http.CallOption) (*ForgetPassReply, error) {
+	var out ForgetPassReply
+	pattern := "/account-center/forget"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation("/ac.service.v1.AccountCenter/ForgetPass"))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, err
 }
 
 func (c *AccountCenterHTTPClientImpl) GetAccountInfo(ctx context.Context, in *GetAccountInfoRequest, opts ...http.CallOption) (*GetAccountInfoReply, error) {

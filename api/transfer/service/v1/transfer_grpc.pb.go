@@ -37,6 +37,9 @@ type TransferClient interface {
 	CleanTrashDir(ctx context.Context, in *ReqCleanTrashDir, opts ...grpc.CallOption) (*RespCleanTrash, error)
 	WithDrawFile(ctx context.Context, in *ReqWithDrawFile, opts ...grpc.CallOption) (*RespWithDraw, error)
 	WithDrawDir(ctx context.Context, in *ReqWithDrawDir, opts ...grpc.CallOption) (*RespWithDraw, error)
+	CreateDir(ctx context.Context, in *ReqCreateDir, opts ...grpc.CallOption) (*RespCreateDir, error)
+	GuestUpload(ctx context.Context, in *ReqGuestUpload, opts ...grpc.CallOption) (*RespGuestUpload, error)
+	GetCodeDownload(ctx context.Context, in *ReqGetCodeDownLoad, opts ...grpc.CallOption) (*RespGetCOdeDownload, error)
 }
 
 type transferClient struct {
@@ -182,6 +185,33 @@ func (c *transferClient) WithDrawDir(ctx context.Context, in *ReqWithDrawDir, op
 	return out, nil
 }
 
+func (c *transferClient) CreateDir(ctx context.Context, in *ReqCreateDir, opts ...grpc.CallOption) (*RespCreateDir, error) {
+	out := new(RespCreateDir)
+	err := c.cc.Invoke(ctx, "/tf.service.v1.Transfer/CreateDir", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *transferClient) GuestUpload(ctx context.Context, in *ReqGuestUpload, opts ...grpc.CallOption) (*RespGuestUpload, error) {
+	out := new(RespGuestUpload)
+	err := c.cc.Invoke(ctx, "/tf.service.v1.Transfer/GuestUpload", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *transferClient) GetCodeDownload(ctx context.Context, in *ReqGetCodeDownLoad, opts ...grpc.CallOption) (*RespGetCOdeDownload, error) {
+	out := new(RespGetCOdeDownload)
+	err := c.cc.Invoke(ctx, "/tf.service.v1.Transfer/GetCodeDownload", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TransferServer is the server API for Transfer service.
 // All implementations must embed UnimplementedTransferServer
 // for forward compatibility
@@ -201,6 +231,9 @@ type TransferServer interface {
 	CleanTrashDir(context.Context, *ReqCleanTrashDir) (*RespCleanTrash, error)
 	WithDrawFile(context.Context, *ReqWithDrawFile) (*RespWithDraw, error)
 	WithDrawDir(context.Context, *ReqWithDrawDir) (*RespWithDraw, error)
+	CreateDir(context.Context, *ReqCreateDir) (*RespCreateDir, error)
+	GuestUpload(context.Context, *ReqGuestUpload) (*RespGuestUpload, error)
+	GetCodeDownload(context.Context, *ReqGetCodeDownLoad) (*RespGetCOdeDownload, error)
 	mustEmbedUnimplementedTransferServer()
 }
 
@@ -252,6 +285,15 @@ func (UnimplementedTransferServer) WithDrawFile(context.Context, *ReqWithDrawFil
 }
 func (UnimplementedTransferServer) WithDrawDir(context.Context, *ReqWithDrawDir) (*RespWithDraw, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method WithDrawDir not implemented")
+}
+func (UnimplementedTransferServer) CreateDir(context.Context, *ReqCreateDir) (*RespCreateDir, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateDir not implemented")
+}
+func (UnimplementedTransferServer) GuestUpload(context.Context, *ReqGuestUpload) (*RespGuestUpload, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GuestUpload not implemented")
+}
+func (UnimplementedTransferServer) GetCodeDownload(context.Context, *ReqGetCodeDownLoad) (*RespGetCOdeDownload, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetCodeDownload not implemented")
 }
 func (UnimplementedTransferServer) mustEmbedUnimplementedTransferServer() {}
 
@@ -536,6 +578,60 @@ func _Transfer_WithDrawDir_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Transfer_CreateDir_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReqCreateDir)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TransferServer).CreateDir(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tf.service.v1.Transfer/CreateDir",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TransferServer).CreateDir(ctx, req.(*ReqCreateDir))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Transfer_GuestUpload_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReqGuestUpload)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TransferServer).GuestUpload(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tf.service.v1.Transfer/GuestUpload",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TransferServer).GuestUpload(ctx, req.(*ReqGuestUpload))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Transfer_GetCodeDownload_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReqGetCodeDownLoad)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TransferServer).GetCodeDownload(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/tf.service.v1.Transfer/GetCodeDownload",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TransferServer).GetCodeDownload(ctx, req.(*ReqGetCodeDownLoad))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Transfer_ServiceDesc is the grpc.ServiceDesc for Transfer service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -602,6 +698,18 @@ var Transfer_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "WithDrawDir",
 			Handler:    _Transfer_WithDrawDir_Handler,
+		},
+		{
+			MethodName: "CreateDir",
+			Handler:    _Transfer_CreateDir_Handler,
+		},
+		{
+			MethodName: "GuestUpload",
+			Handler:    _Transfer_GuestUpload_Handler,
+		},
+		{
+			MethodName: "GetCodeDownload",
+			Handler:    _Transfer_GetCodeDownload_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

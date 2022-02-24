@@ -18,6 +18,7 @@ func apiV1(group gin.IRoutes, ac *service.AccountCenterService) {
 	group.GET("/common/guest", GetGuestHandler)
 	group.POST("/common/register",RegisterHandler)
 	group.POST("/e-validate", GetEmailHandler)
+	group.POST("/forget-pass",ForgetPassHandler)
 	group.Use(middleware.JWTAuth())
 	group.GET("/logout", LogoutHandler)
 	group.POST("/set-admin", SetAdminHandler)
@@ -25,6 +26,20 @@ func apiV1(group gin.IRoutes, ac *service.AccountCenterService) {
 	group.POST("/reset", ResetPassHandler)
 	group.GET("/list",UserListHandler)
 	group.POST("/update",UpdateInfoHandler)
+
+}
+func ForgetPassHandler(c *gin.Context)  {
+	req := &pb.ForgetPassRequest{}
+	if err := c.BindJSON(req);err != nil {
+		response.NewErrWithCodeAndMsg(c,200,response.BIND_JSON_ERROR)
+		return
+	}
+	res,err := accountService.ForgetPass(c,req)
+	if err != nil {
+		response.NewErrWithCodeAndMsg(c,200,err.Error())
+		return
+	}
+	response.NewSuccess(c,res)
 }
 func ResetPassHandler(c *gin.Context) {
 	req := &pb.PasswordResetRequest{}
@@ -109,7 +124,7 @@ func RegisterHandler(c *gin.Context) {
 
 	res,err := accountService.Register(c,req)
 	if err != nil {
-		response.NewErrWithCodeAndMsg(c,200,response.BIND_JSON_ERROR)
+		response.NewErrWithCodeAndMsg(c,200,err.Error())
 		return
 	}
 	response.NewSuccess(c,res)
@@ -147,14 +162,26 @@ func UpdateInfoHandler(c *gin.Context){
 }
 
 func UserListHandler(c *gin.Context) {
+
+
 	req := &pb.ListAccountRequest{}
-	if err := c.BindQuery(req);err != nil {
+	type Params struct {
+		Offset int `form:"offset"`
+		Limit  int `form:"limit"`
+		query string `form:"query"`
+	}
+	params := &Params{}
+	if err := c.BindQuery(params);err != nil {
 		response.NewErrWithCodeAndMsg(c,200,response.BIND_JSON_ERROR)
 		return
 	}
+
+	req.Limit = int32(params.Limit)
+	req.Offset = int32(params.Offset)
+	req.Query   = c.Query("query")
 	res,err := accountService.ListAccount(c,req)
 	if err != nil {
-		response.NewErrWithCodeAndMsg(c,200,response.BIND_JSON_ERROR)
+		response.NewErrWithCodeAndMsg(c,200,err.Error())
 		return
 	}
 	response.NewSuccess(c,res)
@@ -164,7 +191,7 @@ func GetGuestHandler(c *gin.Context) {
 	req := &pb.GetGuestRequest{}
 	res,err := accountService.GetGuest(c,req)
 	if err != nil {
-		response.NewErrWithCodeAndMsg(c,200,response.BIND_JSON_ERROR)
+		response.NewErrWithCodeAndMsg(c,200,err.Error())
 		return
 	}
 	response.NewSuccess(c,res)
@@ -174,7 +201,7 @@ func GetPornHandler(c *gin.Context) {
 	req := &pb.GetPornRequest{}
 	res ,err := accountService.GetPorn(c,req)
 	if err != nil {
-		response.NewErrWithCodeAndMsg(c,200,response.BIND_JSON_ERROR)
+		response.NewErrWithCodeAndMsg(c,200,err.Error())
 		return
 	}
 	response.NewSuccess(c,res)

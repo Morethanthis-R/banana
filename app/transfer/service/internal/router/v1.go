@@ -20,15 +20,17 @@ var transferService *service.TransferService
 
 func apiV1(group gin.IRoutes, tf *service.TransferService) {
 	transferService = tf
-	group.POST("/upload-static", UploadStatic)
 	group.GET("/download", DownloadHandler)
 	group.Use(middleware.JWTAuth())
-	group.POST("/upload", UploadHandler)
 	group.GET("/file-list", GetUserFileList)
 	group.GET("/del-file", DeleteFile)
 	group.GET("/share", ShareFile)
 	group.GET("/preview", PreviewFile)
 	group.GET("/census", FileCensus)
+	group.GET("/trash-list",GetUserTrashList)
+	group.GET("/del-dir",DeleteDirs)
+	group.POST("/withdraw-file",WithDrawFile)
+	group.POST("/withdraw-dir",WithDrawDir)
 }
 
 /// 解析多个文件上传中，每个具体的文件的信息
@@ -214,13 +216,13 @@ func UploadHandler(c *gin.Context) {
 		fileHeader, fileData, err := ParseFromHead(readData, readTotal, append(boundary, []byte("\r\n")...), c.Request.Body)
 		if err != nil {
 			util.Println(err)
-			response.NewErrWithCodeAndMsg(c, 200, errors.FromError(err).Message)
+			response.NewErrWithCodeAndMsg(c, 200, err.Error())
 			return
 		}
 		f, err := os.Create(fileHeader.FileName)
 		if err != nil {
 			util.Println(err)
-			response.NewErrWithCodeAndMsg(c, 200, errors.FromError(err).Message)
+			response.NewErrWithCodeAndMsg(c, 200, err.Error())
 			return
 		}
 		f.Write(fileData)
@@ -232,7 +234,7 @@ func UploadHandler(c *gin.Context) {
 
 		if err != nil {
 			util.Println(err)
-			response.NewErrWithCodeAndMsg(c, 200, errors.FromError(err).Message)
+			response.NewErrWithCodeAndMsg(c, 200, err.Error())
 			return
 		}
 		if reach_end {
@@ -244,16 +246,9 @@ func UploadHandler(c *gin.Context) {
 		}
 	}
 
-
-	cookie,err:= c.Request.Cookie("directory")
-	if err != nil && err.Error() !="http: named cookie not present"{
-		response.NewErrWithCodeAndMsg(c, 200, "cookie fail")
-		return
-	}
-	dir:=""
-	if cookie.Value!= ""{
-		dir = cookie.Value
-		if strings.Contains(dir,"_") ==true{
+	directroy:=c.Request.Header.Get("Directory")
+	if directroy!= ""{
+		if strings.Contains(directroy,"_") ==true{
 			response.NewErrWithCodeAndMsg(c, 200, "非法路径，路径包含字符\"_\"")
 			return
 		}
@@ -270,7 +265,7 @@ func UploadHandler(c *gin.Context) {
 				FileHash: filehash,
 				ContentType: v,
 			},
-			Directory: dir,
+			Directory: directroy,
 		}
 		res, err := transferService.UploadEntry(c, req)
 		if err != nil {
@@ -382,7 +377,7 @@ func DownloadHandler(c *gin.Context) {
 	fid, err := strconv.Atoi(fidstr)
 	if err != nil {
 		util.Println(err)
-		response.NewErrWithCodeAndMsg(c, 200, errors.FromError(err).Message)
+		response.NewErrWithCodeAndMsg(c, 200, err.Error())
 		return
 	}
 	req := &pb.ReqDownload{Fid: int32(fid)}
@@ -391,10 +386,11 @@ func DownloadHandler(c *gin.Context) {
 	defer os.Remove(res.Filename)
 	if err != nil {
 		util.Println(err)
-		response.NewErrWithCodeAndMsg(c, 200, errors.FromError(err).Message)
+		response.NewErrWithCodeAndMsg(c, 200, err.Error())
 	}
-	c.Header("Content-Type", "application/octet-stream")
+	c.Header("Content-Type", res.Type)
 	c.Header("Content-Disposition", "attachment; filename="+res.Filename)
+	//c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=utf-8''%s", url.QueryEscape(res.Filename)))
 	c.Header("Content-Transfer-Encoding", "binary")
 	c.Header("Cache-Control", "no-cache")
 
@@ -420,6 +416,53 @@ func PreviewFile(c *gin.Context) {
 	})
 }
 
+func WithDrawDir(c *gin.Context){
+	req := &pb.ReqWithDrawDir{}
+	if err := c.BindJSON(req);err != nil {
+		response.NewErrWithCodeAndMsg(c,200,"传参格式错误")
+		return
+	}
+	res ,err := transferService.WithDrawDir(c,req)
+	if err != nil {
+		response.NewErrWithCodeAndMsg(c,200,err.Error())
+		return
+	}
+	response.NewSuccess(c,res)
+}
+func WithDrawFile(c *gin.Context){
+	req := &pb.ReqWithDrawFile{}
+	if err := c.BindJSON(req);err != nil {
+		response.NewErrWithCodeAndMsg(c,200,"传参格式错误")
+		return
+	}
+	res ,err := transferService.WithDrawFile(c,req)
+	if err != nil {
+		response.NewErrWithCodeAndMsg(c,200,err.Error())
+		return
+	}
+	response.NewSuccess(c,res)
+}
+func GetUserTrashList(c *gin.Context){
+	req := &pb.ReqGetUserTrashBin{}
+	type ParseForm struct {
+		SortObject  int32  `form:"sort_object"` //0:默认排序 1:文件名长短 2:编辑时间 4:文件大小
+		SortType    int32  `form:"sort_type"`       //0:系统默认 1:asc升序  2:desc降序
+	}
+	parse := &ParseForm{}
+	if err := c.BindQuery(parse);err != nil {
+		response.NewErrWithCodeAndMsg(c,200,"传参格式错误")
+		return
+	}
+
+	req.SortObject = parse.SortObject
+	req.SortType = parse.SortType
+	res,err := transferService.GetUserTrashList(c,req)
+	if err != nil {
+		response.NewErrWithCodeAndMsg(c,200,err.Error())
+		return
+	}
+	response.NewSuccess(c,res)
+}
 func GetUserFileList(c *gin.Context) {
 	req := &pb.ReqGetUserFileTree{}
 	type ParseForm struct {
@@ -446,6 +489,28 @@ func GetUserFileList(c *gin.Context) {
 	response.NewSuccess(c,res)
 }
 
+func DeleteDirs(c *gin.Context){
+	req := &pb.ReqDeleteDir{}
+	type ParseForm struct {
+		Did []int32 `form:"did"`
+	}
+	dids := &ParseForm{}
+	if err := c.ShouldBindQuery(dids);err != nil {
+		response.NewErrWithCodeAndMsg(c,200,"传参格式错误")
+		return
+	}
+
+	req.Did = dids.Did
+	res,err := transferService.DeleteDir(c,req)
+	if err !=nil{
+		response.NewErrWithCodeAndMsg(c,200,err.Error())
+		return
+	}
+
+	response.NewSuccess(c,res)
+
+
+}
 func DeleteFile(c *gin.Context) {
 	req := &pb.ReqDeleteFile{}
 

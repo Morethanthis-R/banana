@@ -29,6 +29,9 @@ func (s *TransferService) UploadStatic(ctx context.Context, req *pb.ReqStatic) (
 func (s *TransferService) GetUserFileTree(ctx context.Context, req *pb.ReqGetUserFileTree) (*pb.RespGetUserFileTree, error) {
 	return s.tf.GetUserFileTree(ctx, req)
 }
+func (s *TransferService) GetUserTrashList(ctx context.Context,req *pb.ReqGetUserTrashBin) (*pb.RespGetUserTrashBin,error){
+	return s.tf.GetTrashBin(ctx,req)
+}
 func (s *TransferService) DeleteFile(ctx context.Context, req *pb.ReqDeleteFile) (*pb.RespDelete, error) {
 	return s.tf.DeleteFile(ctx, req)
 }
@@ -55,11 +58,19 @@ func (s *TransferService) CleanTrashFile(ctx context.Context, req *pb.ReqCleanTr
 func (s *TransferService) CleanTrashDir(ctx context.Context, req *pb.ReqCleanTrashDir) (*pb.RespCleanTrash, error) {
 	return s.tf.CleanTrashDir(ctx,req)
 }
-
 func (s *TransferService) WithDrawFile(ctx context.Context,req *pb.ReqWithDrawFile) (*pb.RespWithDraw,error) {
 	return s.tf.WithDrawFile(ctx,req)
 }
-
 func (s *TransferService) WithDrawDir(ctx context.Context,req *pb.ReqWithDrawDir) (*pb.RespWithDraw,error){
 	return s.tf.WithDrawDir(ctx,req)
+}
+func (s *TransferService) CreateDir(ctx context.Context,req *pb.ReqCreateDir)(*pb.RespCreateDir,error){
+	return s.tf.CreateDir(ctx,req)
+}
+
+func (s *TransferService) GuestUpload(ctx context.Context,req *pb.ReqGuestUpload)(*pb.RespGuestUpload,error){
+	return s.tf.GuestUpload(ctx,req)
+}
+func (s *TransferService) GetCodeDownload(ctx context.Context,req *pb.ReqGetCodeDownLoad)(*pb.RespGetCOdeDownload,error){
+	return s.tf.GetCodeDownload(ctx,req)
 }

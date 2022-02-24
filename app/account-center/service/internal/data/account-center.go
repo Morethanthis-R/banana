@@ -38,13 +38,13 @@ func (a *accountCenterRepo) SetAdmin(ctx context.Context, b *pb.SetAdminRequest)
 		return res, ecode.EXTERNAL_API_NO_RESPONSE.SetMessage("断言失败")
 	} else if claims.UserRole != int8(127) {
 		return res, ecode.EXTERNAL_API_NO_RESPONSE.SetMessage("非管理员禁止操作")
-	} else {
+	}else {
 		uid = claims.UserId
 	}
 	if b.Uid == int32(uid) {
-		return res, ecode.EXTERNAL_API_NO_RESPONSE.SetMessage("无法操作")
+		return res, ecode.EXTERNAL_API_NO_RESPONSE.SetMessage("无法操作本人角色状态")
 	}
-	err := a.data.db.Model(&biz.User{}).Where("id = ?").Update("role", b.Role).Error
+	err := a.data.db.Model(&biz.User{}).Where("id = ?",b.Uid).Update("role", b.Role).Error
 	if err != nil {
 		return res, ecode.MYSQL_ERR.SetMessage(err.Error())
 	}
@@ -83,6 +83,27 @@ func (a *accountCenterRepo) ResetPass(ctx context.Context, rq *pb.PasswordResetR
 		return res, ecode.MYSQL_ERR.SetMessage(err.Error())
 	}
 	res.Id = rq.Id
+	return res, nil
+}
+
+func (a *accountCenterRepo) ForgetPass(ctx context.Context,rq *pb.ForgetPassRequest)(*pb.ForgetPassReply,error){
+	res := &pb.ForgetPassReply{}
+	key := fmt.Sprintf("%s:%s:%s", "email", "reset",rq.Email)
+	redisCli := a.data.cache
+	code, err := redisCli.Get(ctx, key).Result()
+	if err != nil {
+		return res, ecode.REDIS_ERR
+	}
+	if strings.Compare(rq.GetValidate(), code) != 0 {
+		return res, ecode.PERMISSION_DENIED.SetMessage("验证码校验不符")
+	}
+
+	newPass, _ := util.HashPassword(rq.GetNewPass())
+	err = a.data.db.Model(&biz.User{}).WithContext(ctx).Where("email = ?", rq.Email).Update("password",newPass).Error
+	if err != nil {
+		return res, ecode.MYSQL_ERR.SetMessage(err.Error())
+	}
+	res.Email = rq.Email
 	return res, nil
 }
 
@@ -201,10 +222,20 @@ func (a *accountCenterRepo) GetList(ctx context.Context, u *pb.ListAccountReques
 	}
 
 	var count int64
-	err := a.data.db.Model(&biz.User{}).
-		Offset(int(u.Offset)).Limit(int(u.Limit)).Count(&count).
-		Order("id asc").
-		Find(&arr).Error
+	sql := a.data.db.Model(&biz.User{})
+
+	like := "%"+u.Query+"%"
+	//like1 := u.Query
+	sql.Where("name like ? or email like ? or telephone like ?",like,like,like).Count(&count)
+
+	if u.Offset != 0{
+		offset := (u.Offset)*u.Limit
+		sql.Offset(int(offset))
+	}
+	if u.Limit != 0{
+		sql.Limit(int(u.Limit))
+	}
+	err := sql.Order("id asc").Find(&arr).Error
 	if err != nil {
 		return res, ecode.MYSQL_ERR
 	}
@@ -295,7 +326,7 @@ func (a *accountCenterRepo) Update(ctx context.Context, b *pb.UpdateAccountInfoR
 	u := &biz.User{}
 	if claims, exist := ctx.Value("claims").(*middleware.Claims); !exist {
 		return 0, ecode.EXTERNAL_API_NO_RESPONSE.SetMessage("断言失败")
-	} else if claims.UserId != int(b.Id) || claims.UserRole != 127 {
+	} else if claims.UserId != int(b.Id) && claims.UserRole != 127 {
 		return 0, ecode.EXTERNAL_API_NO_RESPONSE.SetMessage("非管理员禁止操作")
 	}
 	err = a.data.db.Model(&biz.User{}).Where("id = ?", b.Id).First(u).Error

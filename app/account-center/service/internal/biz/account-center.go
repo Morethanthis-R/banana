@@ -14,7 +14,7 @@ type User struct {
 	Email        string `gorm:"type:varchar(30) not null" json:"email"`
 	Password     string `gorm:"type:varchar(256);default:'' not null" json:"password"`
 	Avatar       string `gorm:"type:varchar(256);default:'https://c-ssl.duitang.com/uploads/item/201409/09/20140909222840_KHPij.jpeg'" json:"avatar"`
-	IsVip        int8   `gorm:"default:0" json:"is_vip"`
+	IsVip        int8   `gorm:"default:1" json:"is_vip"`
 	Role         int8   `gorm:"type:tinyint(5);default:1" json:"role"`
 	Status       int    `gorm:"type:tinyint(5)" json:"status"` // 0 禁用  1可用
 	Porn         string `gorm:"type:varchar(6)" json:"porn"`   //邀请码
@@ -47,6 +47,7 @@ type AccountCenterRepo interface {
 	ResetPass(ctx context.Context, rq *pb.PasswordResetRequest) (*pb.PasswordResetReply, error)
 	GetGuest(ctx context.Context, rq *pb.GetGuestRequest) (*pb.GetGuestReply, error)
 	SetAdmin(ctx context.Context, rq *pb.SetAdminRequest) (*pb.SetAdminReply, error)
+	ForgetPass(ctx context.Context,rq *pb.ForgetPassRequest) (*pb.ForgetPassReply,error)
 }
 
 type AccountCenterCase struct {
@@ -56,6 +57,9 @@ type AccountCenterCase struct {
 
 func NewAccountCenterCase(repo AccountCenterRepo, logger log.Logger) *AccountCenterCase {
 	return &AccountCenterCase{repo: repo, log: log.NewHelper(log.With(logger, "module", "accountcenter/case"))}
+}
+func (ac *AccountCenterCase)ForgetPass(ctx context.Context,l *pb.ForgetPassRequest)(*pb.ForgetPassReply,error)  {
+	return ac.repo.ForgetPass(ctx,l)
 }
 func (ac *AccountCenterCase) SetAdmin(ctx context.Context,l *pb.SetAdminRequest) (*pb.SetAdminReply,error){
 	return ac.repo.SetAdmin(ctx,l)

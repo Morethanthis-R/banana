@@ -14,7 +14,7 @@ type File struct {
 	FileHash      string `gorm:"type:text" json:"file_hash"`
 	FilePath      string `gorm:"type:text" json:"file_path"` //minio用
 	FileSize      int64  `json:"file_size"`
-	FileStr       string `gorm:"type:text" json:"file_str"` //文件目录用
+	FileStr       string `gorm:"type:text ;default:''" json:"file_str"` //文件目录用
 	Attribute     int8   `json:"attribute"`
 	ContentType   string `gorm:"type:varchar(256)" json:"content_type"`
 	Suffix        string `gorm:"type:varchar(10)" json:"suffix"`
@@ -41,6 +41,7 @@ type UserDirectory struct {
 	PathStr   string `gorm:"type:varchar(128)" json:"path_str"`
 	Name      string `gorm:"type:varchar(128)" json:"name"`
 	DirStatus int8   `gorm:"type:tinyint(5);default:1" json:"dir_status""` //1存在 0已删除(彻底删除) 2删除(垃圾桶)
+	Key       string `gorm:"default:''" json:"key"`
 	CreatedAt int64  `gorm:"autoCreateAt" json:"created_at"`
 	UpdatedAt int64  `gorm:"autoUpdateAt" json:"updated_at"`
 }
@@ -61,6 +62,9 @@ type TransferRepo interface {
 	SearchFile(ctx context.Context, u *pb.ReqSearchFile) (*pb.RespSearchFile, error)
 	WithDrawFile(ctx context.Context,u *pb.ReqWithDrawFile)(*pb.RespWithDraw,error)
 	WithDrawDir(ctx context.Context,u *pb.ReqWithDrawDir) (*pb.RespWithDraw,error)
+	CreateDir(ctx context.Context,u *pb.ReqCreateDir) (*pb.RespCreateDir,error)
+	GuestUpload(ctx context.Context,u *pb.ReqGuestUpload) (*pb.RespGuestUpload,error)
+	GetCodeDownload(ctx context.Context,u *pb.ReqGetCodeDownLoad) (*pb.RespGetCOdeDownload,error)
 }
 
 type TransferCase struct {
@@ -124,4 +128,16 @@ func (tf *TransferCase) WithDrawFile(ctx context.Context,t *pb.ReqWithDrawFile) 
 
 func (tf *TransferCase) WithDrawDir(ctx context.Context,t *pb.ReqWithDrawDir) (*pb.RespWithDraw,error){
 	return tf.repo.WithDrawDir(ctx,t)
+}
+
+func (tf *TransferCase) CreateDir(ctx context.Context,t *pb.ReqCreateDir) (*pb.RespCreateDir,error){
+	return tf.repo.CreateDir(ctx,t)
+}
+
+func (tf *TransferCase) GuestUpload(ctx context.Context,t *pb.ReqGuestUpload) (*pb.RespGuestUpload,error){
+	return tf.repo.GuestUpload(ctx,t)
+}
+
+func (tf *TransferCase) GetCodeDownload(ctx context.Context,t *pb.ReqGetCodeDownLoad) (*pb.RespGetCOdeDownload,error){
+	return tf.repo.GetCodeDownload(ctx,t)
 }

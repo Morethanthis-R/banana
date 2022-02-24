@@ -34,6 +34,7 @@ type AccountCenterClient interface {
 	UpdateAccountInfo(ctx context.Context, in *UpdateAccountInfoRequest, opts ...grpc.CallOption) (*UpdateAccountInfoReply, error)
 	GetPorn(ctx context.Context, in *GetPornRequest, opts ...grpc.CallOption) (*GetPornReply, error)
 	GetGuest(ctx context.Context, in *GetGuestRequest, opts ...grpc.CallOption) (*GetGuestReply, error)
+	ForgetPass(ctx context.Context, in *ForgetPassRequest, opts ...grpc.CallOption) (*ForgetPassReply, error)
 }
 
 type accountCenterClient struct {
@@ -152,6 +153,15 @@ func (c *accountCenterClient) GetGuest(ctx context.Context, in *GetGuestRequest,
 	return out, nil
 }
 
+func (c *accountCenterClient) ForgetPass(ctx context.Context, in *ForgetPassRequest, opts ...grpc.CallOption) (*ForgetPassReply, error) {
+	out := new(ForgetPassReply)
+	err := c.cc.Invoke(ctx, "/ac.service.v1.AccountCenter/ForgetPass", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AccountCenterServer is the server API for AccountCenter service.
 // All implementations must embed UnimplementedAccountCenterServer
 // for forward compatibility
@@ -168,6 +178,7 @@ type AccountCenterServer interface {
 	UpdateAccountInfo(context.Context, *UpdateAccountInfoRequest) (*UpdateAccountInfoReply, error)
 	GetPorn(context.Context, *GetPornRequest) (*GetPornReply, error)
 	GetGuest(context.Context, *GetGuestRequest) (*GetGuestReply, error)
+	ForgetPass(context.Context, *ForgetPassRequest) (*ForgetPassReply, error)
 	mustEmbedUnimplementedAccountCenterServer()
 }
 
@@ -210,6 +221,9 @@ func (UnimplementedAccountCenterServer) GetPorn(context.Context, *GetPornRequest
 }
 func (UnimplementedAccountCenterServer) GetGuest(context.Context, *GetGuestRequest) (*GetGuestReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetGuest not implemented")
+}
+func (UnimplementedAccountCenterServer) ForgetPass(context.Context, *ForgetPassRequest) (*ForgetPassReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ForgetPass not implemented")
 }
 func (UnimplementedAccountCenterServer) mustEmbedUnimplementedAccountCenterServer() {}
 
@@ -440,6 +454,24 @@ func _AccountCenter_GetGuest_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AccountCenter_ForgetPass_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ForgetPassRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AccountCenterServer).ForgetPass(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ac.service.v1.AccountCenter/ForgetPass",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AccountCenterServer).ForgetPass(ctx, req.(*ForgetPassRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AccountCenter_ServiceDesc is the grpc.ServiceDesc for AccountCenter service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -494,6 +526,10 @@ var AccountCenter_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetGuest",
 			Handler:    _AccountCenter_GetGuest_Handler,
+		},
+		{
+			MethodName: "ForgetPass",
+			Handler:    _AccountCenter_ForgetPass_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

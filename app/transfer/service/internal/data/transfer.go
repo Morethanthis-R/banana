@@ -48,6 +48,91 @@ func NewTransferRepo(data *Data, logger log.Logger) biz.TransferRepo {
 		log:  log.NewHelper(log.With(logger, "module", "data/tf")),
 	}
 }
+func (t *transferRepo) GuestUpload(ctx context.Context, req *pb.ReqGuestUpload) (*pb.RespGuestUpload, error) {
+	//id := ctx.Value("x-md-global-uid").(int)
+	res := &pb.RespGuestUpload{}
+	claims := ctx.Value("claims").(*middleware.Claims)
+	var err error
+	fileinfo := minio.UploadInfo{}
+	filetype := util.String2StringArrWithSeparate(req.File.Filename, ".", true)
+	finalName := fmt.Sprintf("%s.%s", req.File.FileHash, filetype[len(filetype)-1])
+	filepath := fmt.Sprintf("%s/%s",claims.UserNum,finalName)
+	var minioUpload = func(bucket, objectName string) (minio.UploadInfo, error) {
+		client := t.data.minio
+		fileinfo, err = client.FPutObject(ctx, bucket, objectName, filepath, minio.PutObjectOptions{ContentType: req.File.ContentType})
+		if err != nil {
+			t.log.Error(err)
+			return fileinfo, err
+		}
+		return fileinfo, err
+	}
+	fileinfo, err = minioUpload(PUBLIC, finalName)
+	if err != nil {
+		t.log.Error(err)
+		return res, ecode.New(500).SetMessage("minio客户端错误")
+	}
+	attribute := 2
+	file := &biz.File{
+		FileName:    req.File.Filename,
+		FileHash:    req.File.FileHash,
+		FilePath:    finalName,
+		FileSize:    fileinfo.Size,
+		FileStr:     "",
+		Attribute:   int8(attribute),
+		Suffix:      filetype[len(filetype)-1],
+		ContentType: req.File.ContentType,
+	}
+	err = t.data.db.Model(&biz.File{}).WithContext(ctx).Create(file).Error
+	if err != nil {
+		t.log.Error(err)
+		return res, ecode.MYSQL_ERR
+	}
+
+	userFile := &biz.UserFile{
+		FileId:  file.ID,
+		UserNum: claims.UserNum,
+		UserId:  claims.UserId,
+	}
+	err = t.data.db.Model(&biz.UserFile{}).WithContext(ctx).Create(userFile).Error
+	if err != nil {
+		t.log.Error(err)
+		return res, ecode.MYSQL_ERR
+	}
+	timeDur := time.Minute * 24 * 60 * 7
+	//second := 24
+	if req.ExpireTime != 0{
+		timeDur = time.Second * time.Duration(req.ExpireTime*1000000000)
+	}
+
+	reqParams := make(url.Values)
+	content := fmt.Sprintf("inline; filename=\"%s\"", file.FileName)
+	reqParams.Set("response-content-disposition", content)
+	bucket := PUBLIC
+	presignedUrl, err := t.data.minio.PresignedGetObject(ctx, bucket, file.FilePath, timeDur, reqParams)
+	if err != nil {
+		t.log.Error(err)
+		return res, ecode.EXTERNAL_API_FAIL.SetMessage("minio客户端错误")
+	}
+	getCode := util.GetRandomInt(6)
+	err = t.data.cache.Set(context.TODO(),getCode,presignedUrl.String(),timeDur).Err()
+	if err != nil {
+		return res,ecode.EXTERNAL_API_FAIL.SetMessage("minio客户端错误")
+	}
+
+	res.GetCode = getCode
+	return res,nil
+}
+
+func (t *transferRepo) GetCodeDownload(ctx context.Context, req *pb.ReqGetCodeDownLoad) (*pb.RespGetCOdeDownload, error) {
+	res := &pb.RespGetCOdeDownload{}
+	var err error
+	url,err := t.data.cache.Get(context.TODO(),req.GetCode).Result()
+	if err != nil {
+		return res,ecode.REDIS_ERR
+	}
+	res.DownloadStr = url
+	return res,nil
+}
 
 func (t *transferRepo) UploadEntry(ctx context.Context, req *pb.ReqUpload) (*pb.RespUpload, error) {
 	id := ctx.Value("x-md-global-uid").(int)
@@ -74,6 +159,7 @@ func (t *transferRepo) UploadEntry(ctx context.Context, req *pb.ReqUpload) (*pb.
 			directory.UserId = id
 			directory.FatherId = 0
 			directory.PathStr = fmt.Sprintf("%s/", claims.UserNum)
+			directory.Key = util.GetRandomDirString(40)
 			err = t.data.db.Model(&biz.UserDirectory{}).Create(directory).Error
 			if err != nil {
 				t.log.Error(err)
@@ -98,7 +184,7 @@ func (t *transferRepo) UploadEntry(ctx context.Context, req *pb.ReqUpload) (*pb.
 					childDir.FatherId = directory.ID
 					childDir.Name = childName
 					childDir.PathStr = fmt.Sprintf("%s%s/", directory.PathStr, childName)
-
+					childDir.Key = util.GetRandomDirString(40)
 					err = t.data.db.Model(&biz.UserDirectory{}).Create(childDir).Error
 					if err != nil {
 						t.log.Error(err)
@@ -126,6 +212,7 @@ func (t *transferRepo) UploadEntry(ctx context.Context, req *pb.ReqUpload) (*pb.
 					childDir.FatherId = lastDir.ID
 					childDir.Name = childName
 					childDir.PathStr = fmt.Sprintf("%s%s/", lastDir.PathStr, childName)
+					childDir.Key = util.GetRandomDirString(40)
 					err = t.data.db.Model(&biz.UserDirectory{}).Create(&childDir).Error
 					if err != nil {
 						t.log.Error(err)
@@ -269,14 +356,12 @@ func (t *transferRepo) DownloadEntry(ctx context.Context, req *pb.ReqDownload) (
 	if err != nil {
 		return res, ecode.MYSQL_ERR
 	}
-	//attribute = 1 私人
 	bucketName := PUBLIC
 	if File.Attribute == 1 {
 		bucketName = PRIVATE
 	}
 
 	client := t.data.minio
-
 	object, err := client.GetObject(ctx, bucketName, File.FilePath, minio.GetObjectOptions{})
 	if err != nil {
 		return res, ecode.New(500).SetMessage("minio客户端错误")
@@ -284,6 +369,7 @@ func (t *transferRepo) DownloadEntry(ctx context.Context, req *pb.ReqDownload) (
 	localfile, err := os.Create(File.FileName)
 	if err != nil {
 		return res, ecode.New(500).SetMessage("创建文件错误")
+		//return
 	}
 	if _, err = io.Copy(localfile, object); err != nil {
 		return res, ecode.New(500).SetMessage("创建文件错误")
@@ -297,6 +383,7 @@ func (t *transferRepo) DownloadEntry(ctx context.Context, req *pb.ReqDownload) (
 	res.Message = "success"
 	res.Status = true
 	res.Filename = File.FileName
+	res.Type = File.ContentType
 	return res, nil
 }
 
@@ -323,6 +410,7 @@ func (t *transferRepo) UploadStatic(ctx context.Context, req *pb.ReqStatic) (*pb
 	//}
 	//fmt.Println(presignedUrl.String())
 	res.FileAddress = fmt.Sprintf("http://47.107.95.82:9000/peach-static/%s", req.Filename)
+
 	return res, nil
 }
 
@@ -423,6 +511,7 @@ func (t *transferRepo) GetUserFileTree(ctx context.Context, req *pb.ReqGetUserFi
 			FileName:     v.FileName,
 			FileType:     v.Suffix,
 			LastModified: v.UpdatedAt,
+			Key:          v.FileHash,
 		}
 		FileMeta = append(FileMeta, meta)
 	}
@@ -434,6 +523,7 @@ func (t *transferRepo) GetUserFileTree(ctx context.Context, req *pb.ReqGetUserFi
 			Size:         util.FormatFileSize(v.Size),
 			DirName:      v.Name,
 			LastModified: v.UpdatedAt,
+			Key:          v.Key,
 		}
 		DirMeta = append(DirMeta, meta)
 	}
@@ -453,53 +543,55 @@ func (t *transferRepo) GetTrashBin(ctx context.Context, req *pb.ReqGetUserTrashB
 	Dir := []*biz.UserDirectory{}
 	sortName := req.SortObject
 	sortType := req.SortType
-	err = t.data.db.Model(&biz.UserDirectory{}).Where("user_id = ? and dir_status = ?", id, DEL).Find(&File).Error
-	if err != nil && err.Error() != "record not found" {
-		return res, ecode.MYSQL_ERR.SetMessage(err.Error())
-	}
-	err = t.data.db.Model(&biz.UserDirectory{}).Where("user_id = ? and file_status = ?",id,DEL).Find(&Dir).Error
+	dids := []int{}
+	err = t.data.db.Model(&biz.UserDirectory{}).Where("user_id = ? and dir_status = ?", id, DEL).Find(&Dir).Pluck("id", &dids).Error
 	if err != nil && err.Error() != "record not found" {
 		return res, ecode.MYSQL_ERR.SetMessage(err.Error())
 	}
 
+	//err = t.data.db.Model(&biz.File{}).Where(" file_status = ? and directory_id in (?)", DEL,dids).Find(&File).Error
+	err = t.data.db.Raw("select * from d_storage.files f where file_status  = 2 and id in (select id from d_storage.user_files uf where uf.user_id = ?)", id).Scan(&File).Error
+	if err != nil {
+		return res, ecode.MYSQL_ERR.SetMessage(err.Error())
+	}
 	//排序两参同传
 	if sortName != 0 && sortType != 0 {
 		switch sortName {
 		case NAME:
 			SortFile(File, func(p, q *biz.File) bool {
-				if sortType == ASC {
+				if sortType == DESC {
 					return p.FileName > q.FileName
 				}
 				return p.FileName < q.FileName
 			})
 			SortDir(Dir, func(p, q *biz.UserDirectory) bool {
-				if sortType == ASC {
+				if sortType == DESC {
 					return p.Name > q.Name
 				}
 				return p.Name < q.Name
 			})
 		case TIME:
 			SortFile(File, func(p, q *biz.File) bool {
-				if sortType == ASC {
+				if sortType == DESC {
 					return p.UpdatedAt > q.UpdatedAt
 				}
 				return p.UpdatedAt < q.UpdatedAt
 			})
 			SortDir(Dir, func(p, q *biz.UserDirectory) bool {
-				if sortType == ASC {
+				if sortType == DESC {
 					return p.UpdatedAt > q.UpdatedAt
 				}
 				return p.UpdatedAt < q.UpdatedAt
 			})
 		case SIZE:
 			SortFile(File, func(p, q *biz.File) bool {
-				if sortType == ASC {
+				if sortType == DESC {
 					return p.FileSize > q.FileSize
 				}
 				return p.FileSize < q.FileSize
 			})
 			SortDir(Dir, func(p, q *biz.UserDirectory) bool {
-				if sortType == ASC {
+				if sortType == DESC {
 					return p.Size > q.Size
 				}
 				return p.Size < q.Size
@@ -515,6 +607,7 @@ func (t *transferRepo) GetTrashBin(ctx context.Context, req *pb.ReqGetUserTrashB
 			FileName:     v.FileName,
 			FileType:     v.Suffix,
 			LastModified: v.UpdatedAt,
+			Key:          v.FileHash,
 		}
 		FileMeta = append(FileMeta, meta)
 	}
@@ -706,7 +799,6 @@ func (t *transferRepo) WithDrawFile(ctx context.Context, req *pb.ReqWithDrawFile
 	//id := ctx.Value("x-md-global-uid").(int)
 	res := &pb.RespWithDraw{}
 	var err error
-
 	files := []*biz.File{}
 	if len(req.Fid) != 0 {
 		err = t.data.db.Model(&biz.File{}).Where("id in (?)  and file_status = ?", req.Fid, DEL).Find(&files).Error
@@ -714,7 +806,6 @@ func (t *transferRepo) WithDrawFile(ctx context.Context, req *pb.ReqWithDrawFile
 			return res, ecode.MYSQL_ERR.SetMessage(err.Error())
 		}
 	}
-
 	client := t.data.minio
 	var sizeCut int64
 	for _, v := range files {
@@ -978,7 +1069,6 @@ func (t *transferRepo) PreviewFile(ctx context.Context, req *pb.ReqPreviewFile) 
 		return res, ecode.MYSQL_ERR
 	}
 	client := t.data.minio
-	//
 	timeDur := time.Second * 24 * 60 * 60
 	reqParams := make(url.Values)
 	content := fmt.Sprintf("inline; filename=\"%s\"", File.FileName)
@@ -1001,73 +1091,105 @@ func (t *transferRepo) FileCensus(ctx context.Context, req *pb.ReqFileCensus) (*
 	var err error
 	res := &pb.RespFileCensus{}
 	dirIds := []int{}
-	err = t.data.db.Model(&biz.UserDirectory{}).Where("user_id = ?",id).Pluck("id",&dirIds).Error
-	if err != nil && err.Error()!="record not found"{
+	err = t.data.db.Model(&biz.UserDirectory{}).Where("user_id = ?", id).Pluck("id", &dirIds).Error
+	if err != nil && err.Error() != "record not found" {
 		return res, ecode.MYSQL_ERR.SetMessage(err.Error())
 	}
 	files := []*biz.File{}
 	err = t.data.db.Model(&biz.File{}).
-		Where("directory_id in (?)",dirIds).
+		Where("directory_id in (?)", dirIds).
 		Order("download_count desc").
 		Find(&files).Error
-	if err != nil && err.Error()!="record not found"{
+	if err != nil && err.Error() != "record not found" {
 		return res, ecode.MYSQL_ERR.SetMessage(err.Error())
 	}
 	var total int64
 	//err = t.data.db.Model(&biz.File{}).Select("sum(file_size)").Error
-	topTen := []*pb.DownloadCensus{}
-	if len(files) <=10{
-		for _,v:=range files{
-			download := &pb.DownloadCensus{
-				FileName: v.FileName,
-				Count:    int32(v.DownloadCount),
-			}
-			topTen = append(topTen,download)
+	topTen := &pb.DownloadCensus{}
+	name := []string{}
+	value := []int32{}
+	if len(files) <= 10 {
+		for _, v := range files {
+			name = append(name, v.FileName)
+			value = append(value, int32(v.DownloadCount))
 		}
 	} else {
 		temp := files[:10]
-		for _,v:=range temp{
-			download := &pb.DownloadCensus{
-				FileName: v.FileName,
-				Count:    int32(v.DownloadCount),
-			}
-			topTen = append(topTen,download)
+		for _, v := range temp {
+			name = append(name, v.FileName)
+			value = append(value, int32(v.DownloadCount))
 		}
 	}
+	topTen.Name = name
+	topTen.Value = value
 	countMap := make(map[string]int)
-	for _,v := range files {
+	for _, v := range files {
 		total += v.FileSize
-		if _,exist := TypeMap[v.Suffix];exist{
-			countMap[TypeMap[v.Suffix]] +=1
+		if _, exist := TypeMap[v.Suffix]; exist {
+			countMap[TypeMap[v.Suffix]] += 1
 		} else {
-			countMap["other"] +=1
+			countMap["other"] += 1
 		}
 	}
-	last := float32(total)/float32(1024*1024*1024*10)
+	last := float32(total) / float32(1024*1024*1024*10)
+	err = t.data.db.Model(&biz.UserDirectory{}).Where("user_id  = ? and father_id = 0", id).Update("size", total).Error
+	if err != nil {
+		return res, ecode.MYSQL_ERR
+	}
 	usage := &pb.Usage{
-		UseStr: fmt.Sprintf("%s/%s",util.FormatFileSize(total),util.FormatFileSize(1024*1024*1024*10)),
+		UseStr: fmt.Sprintf("%s/%s", util.FormatFileSize(total), util.FormatFileSize(1024*1024*1024*10)),
 		Used:   last,
 	}
-	audio := countMap["audio"]
-	video := countMap["video"]
-	image := countMap["img"]
-	doc := countMap["doc"]
-	other := countMap["other"]
-	ratio := &pb.FileRatio{
-		Audio: int32(audio),
-		Video: int32(video),
-		Image: int32(image),
-		Doc:  int32(doc),
-		Other: int32(other),
+	ratios := []*pb.FileRatio{}
+	for k, v := range countMap {
+		ratio := &pb.FileRatio{
+			Name:  k,
+			Value: int32(v),
+		}
+		ratios = append(ratios, ratio)
 	}
-
-	res.FileRatio = ratio
+	res.FileRatio = ratios
 	res.Usage = usage
 	res.TopTen = topTen
-	return res,nil
+	return res, nil
 
 }
 
 func (t *transferRepo) SearchFile(ctx context.Context, req *pb.ReqSearchFile) (*pb.RespSearchFile, error) {
 	return nil, nil
+}
+
+func (t *transferRepo) CreateDir(ctx context.Context, req *pb.ReqCreateDir) (*pb.RespCreateDir, error) {
+	res := &pb.RespCreateDir{}
+	id := ctx.Value("x-md-global-uid").(int)
+	//claims := ctx.Value("claims").(*middleware.Claims)
+	var err error
+	directory := &biz.UserDirectory{}
+	if req.LocDid == 0 {
+		err = t.data.db.Model(&biz.UserDirectory{}).Where("user_id = ? and father_id = ?", id, 0).Find(directory).Error
+		if err != nil {
+			return res, ecode.MYSQL_ERR
+		}
+	} else {
+		err = t.data.db.Model(&biz.UserDirectory{}).Where("user_id = ? and id = ?", id, req.LocDid).Find(directory).Error
+		if err != nil {
+			return res, ecode.MYSQL_ERR
+		}
+	}
+
+	newDir := &biz.UserDirectory{
+		FatherId:  directory.ID,
+		UserId:    id,
+		PathStr:   fmt.Sprintf("%s%s", directory.PathStr, req.DirName),
+		Name:      req.DirName,
+		DirStatus: 1,
+		Key:       util.GetRandomDirString(40),
+	}
+
+	err = t.data.db.Model(&biz.UserDirectory{}).Create(newDir).Error
+	if err != nil {
+		return res, ecode.MYSQL_ERR
+	}
+	res.Did = int32(newDir.ID)
+	return res, nil
 }

@@ -85,6 +85,12 @@ service AccountCenter{
       get:"/account-center/common/guest"
     };
   }
+
+  rpc ForgetPass (ForgetPassRequest) returns(ForgetPassReply){
+    option (google.api.http) = {
+      get:"/account-center/forget"
+    };
+  }
   //  rpc MobileLogin(MobileLoginRequest) returns (MobileReply){
 //  }
 //
@@ -93,6 +99,14 @@ service AccountCenter{
 
 }
 
+message ForgetPassRequest{
+  string email = 1;
+  string new_pass = 2;
+  string validate = 3;
+}
+message ForgetPassReply{
+  string email = 1;
+}
 message SetAdminRequest {
   int32 uid = 1;
   int32 role = 2;
@@ -164,6 +178,7 @@ message PasswordResetReply{
 message ListAccountRequest{
   int32 offset = 1;
   int32 limit  = 2;
+  string query = 3;
 }
 
 message ListAccountReply{

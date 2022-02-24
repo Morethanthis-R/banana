@@ -15,7 +15,9 @@ func NewAccountCenterService(ac *biz.AccountCenterCase, logger log.Logger) *Acco
 		log: log.NewHelper(logger),
 	}
 }
-
+func (s *AccountCenterService) ForgetPass(ctx context.Context,req *pb.ForgetPassRequest)(*pb.ForgetPassReply,error){
+	return s.ac.ForgetPass(ctx,req)
+}
 func (s *AccountCenterService) SetAdmin(ctx context.Context, req *pb.SetAdminRequest) (*pb.SetAdminReply, error) {
 	return s.ac.SetAdmin(ctx, req)
 }

@@ -66,8 +66,40 @@ service Transfer{
 
   }
 
+  rpc CreateDir(ReqCreateDir) returns(RespCreateDir){
+
+  }
+
+  rpc GuestUpload(ReqGuestUpload) returns(RespGuestUpload){
+
+  }
+
+  rpc GetCodeDownload (ReqGetCodeDownLoad) returns(RespGetCOdeDownload){
+
+  }
+
+}
+message ReqGetCodeDownLoad {
+  string get_code = 1;
+}
+message RespGetCOdeDownload {
+  string download_str = 1;
+}
+message ReqGuestUpload {
+  int64 expire_time = 1;
+  File file = 2;
 }
 
+message RespGuestUpload {
+  string get_code = 1;
+}
+message ReqCreateDir {
+  int32 loc_did = 1;
+  string dir_name = 2;
+}
+message RespCreateDir {
+  int32 did = 1;
+}
 message ReqWithDrawFile {
   repeated int32 fid = 1;
 }
@@ -98,16 +130,13 @@ message RespSearchFile {
   bool   status = 2;
 }
 message FileRatio{
-  int32 audio =1;
-  int32 video =2;
-  int32 image =3;
-  int32 doc   =4;
-  int32 other =5;
+  string name =1;
+  int32 value = 2;
 }
 
 message DownloadCensus{
-  string file_name = 1;
-  int32 count = 2;
+  repeated string name = 1;
+  repeated int32 value = 2;
 }
 message Usage {
   string  use_str = 1;
@@ -119,17 +148,18 @@ message ReqFileCensus{
 
 message RespFileCensus{
   Usage     usage = 1;
-  FileRatio file_ratio = 3;
-  repeated DownloadCensus top_ten =4; //若没有文件则返回空结构体
+  repeated FileRatio file_ratio = 3;
+  DownloadCensus top_ten =4; //若没有文件则返回空结构体
 }
 
 message ReqShareFileStr{
   int32 fid = 1;
+  int64 expire_time = 2;
 }
 
 message RespShareFileStr{
   int32 fid = 1;
-  string share_Str = 2;
+  string get_code = 2;
 }
 
 message ReqPreviewFile{
@@ -162,6 +192,7 @@ message RespDownload {
   string filename = 1;
   bool  status = 2;
   string message = 3;
+  string type = 4;
 }
 
 message ReqStatic {
@@ -171,6 +202,7 @@ message ReqStatic {
 
 message RespStatic {
   string file_address = 1;
+  string get_code = 2;
 }
 
 message ReqGetUserFileTree {
@@ -186,6 +218,7 @@ message FileMetaObject{
   string file_name = 3;
   string file_type = 4;
   int64  last_modified = 5;
+  string key = 6;
 }
 
 message DirMetaObject{
@@ -193,6 +226,7 @@ message DirMetaObject{
   string size = 2;
   string dir_name =3;
   int64 last_modified = 5;
+  string key = 6;
 }
 
 message RespGetUserFileTree {
