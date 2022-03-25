@@ -9,8 +9,8 @@ server:
     timeout: 1s
 data:
   minio:
-    end_points: 47.107.95.82:9000
-    access_key_id: minio
+    end_points: 172.20.0.6:9000
+    access_key_id: banana
     secret_access_key: "55882664"
   database:
     driver: mysql

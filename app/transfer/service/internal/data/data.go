@@ -22,14 +22,27 @@ var ProviderSet = wire.NewSet(NewData, NewTransferRepo)
 type Data struct {
 	cache *redis.Client
 	db  *gorm.DB
-	minio *minio.Client
+	minio_internal *minio.Client
+	minio_online   *minio.Client
 	log *log.Helper
 
 }
 
-func NewMinioClient(conf *conf.Data,logger log.Logger) *minio.Client{
+func NewMinioClientInternal(conf *conf.Data,logger log.Logger) *minio.Client{
 	log := log.NewHelper(log.With(logger, "module", "transfer/data/minio"))
 	client, err := minio.New(conf.Minio.EndPoints, &minio.Options{
+		Creds:        credentials.NewStaticV4(conf.Minio.AccessKeyId,conf.Minio.SecretAccessKey,""),
+		Secure:       false,
+	})
+	if err != nil {
+		log.Fatal(err)
+		return nil
+	}
+	return client
+}
+func NewMinioClientOnline(conf *conf.Data,logger log.Logger) *minio.Client{
+	log := log.NewHelper(log.With(logger, "module", "transfer/data/minio"))
+	client, err := minio.New("47.107.95.82:8000", &minio.Options{
 		Creds:        credentials.NewStaticV4(conf.Minio.AccessKeyId,conf.Minio.SecretAccessKey,""),
 		Secure:       false,
 	})
@@ -82,7 +95,7 @@ func NewDB(conf *conf.Data, logger log.Logger) *gorm.DB {
 	}
 
 	if err := db.AutoMigrate(
-		&biz.File{},&biz.UserFile{},&biz.UserDirectory{},
+		&biz.File{},&biz.UserFile{},&biz.UserDirectory{},&biz.ShareHistory{},
 		); err != nil {
 		log.Fatal(err)
 	}
@@ -97,7 +110,8 @@ func NewData(conf *conf.Data,logger log.Logger) (*Data, func(), error) {
 	d := &Data{
 		cache: NewCache(conf,logger),
 		db:  NewDB(conf,logger),
-		minio: NewMinioClient(conf,logger),
+		minio_internal: NewMinioClientInternal(conf,logger),
+		minio_online: NewMinioClientOnline(conf,logger),
 		log: log,
 	}
 	return d, func() {

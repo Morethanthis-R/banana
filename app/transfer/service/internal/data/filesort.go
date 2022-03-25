@@ -40,7 +40,7 @@ func (dw DirMetaWrapper) Len() int{
 }
 
 func (dw DirMetaWrapper) Swap(i,j int){
-	dw.Dir[i],dw.Dir[j] = dw.Dir[j],dw.Dir[j]
+	dw.Dir[i],dw.Dir[j] = dw.Dir[j],dw.Dir[i]
 }
 
 func (dw DirMetaWrapper) Less(i,j int) bool{

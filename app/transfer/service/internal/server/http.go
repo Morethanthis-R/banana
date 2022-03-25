@@ -16,9 +16,10 @@ func NewHTTPServer(c *conf.Server,tf *service.TransferService) *http.Server {
 	engine.Use(middleware.Cors())
 	router.Init(engine,tf)
 	engine.Group("/banana/tf").Use(middleware.JWTAuth()).POST("/upload",router.UploadHandler)
+	engine.Group("/banana/tf").Use(middleware.JWTAuth()).POST("/guest-upload",router.GuestUpload)
 	engine.Group("/banana/tf").POST("/upload-static",router.UploadStatic)
 	httpSrv := http.NewServer(http.Address(c.Http.Addr), http.Timeout(c.Http.Timeout.AsDuration()))
 	httpSrv.HandlePrefix("/",engine)
-	pprof.Register(engine, "/common/debug")
+	pprof.Register(engine, "/banana/transfer/debug")
 	return httpSrv
 }

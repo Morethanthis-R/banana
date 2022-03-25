@@ -14,7 +14,7 @@ type File struct {
 	FileHash      string `gorm:"type:text" json:"file_hash"`
 	FilePath      string `gorm:"type:text" json:"file_path"` //minio用
 	FileSize      int64  `json:"file_size"`
-	FileStr       string `gorm:"type:text ;default:''" json:"file_str"` //文件目录用
+	FileStr       string `gorm:"type:text not null" json:"file_str"` //文件目录用
 	Attribute     int8   `json:"attribute"`
 	ContentType   string `gorm:"type:varchar(256)" json:"content_type"`
 	Suffix        string `gorm:"type:varchar(10)" json:"suffix"`
@@ -38,14 +38,27 @@ type UserDirectory struct {
 	FatherId  int    `gorm:"index" json:"father_id"` //根结点默认0  用户专属根目录为 fatherid==0，userid==globaluid
 	UserId    int    `gorm:"index" json:"user_id"`
 	Size      int64  `json:"size"`
-	PathStr   string `gorm:"type:varchar(128)" json:"path_str"`
-	Name      string `gorm:"type:varchar(128)" json:"name"`
+	PathStr   string `gorm:"type:varchar(256)" json:"path_str"`
+	Name      string `gorm:"type:varchar(256)" json:"name"`
+	PathTree  string `gorm:"type:varchar(256)" json:"path_tree"`
 	DirStatus int8   `gorm:"type:tinyint(5);default:1" json:"dir_status""` //1存在 0已删除(彻底删除) 2删除(垃圾桶)
 	Key       string `gorm:"default:''" json:"key"`
 	CreatedAt int64  `gorm:"autoCreateAt" json:"created_at"`
 	UpdatedAt int64  `gorm:"autoUpdateAt" json:"updated_at"`
 }
 
+type ShareHistory struct {
+	ID        int    `gorm:"primary_key" json:"id"`
+	Fid       int    `gorm:"not null" json:"fid"`
+	Describe  string `gorm:"not null" json:"describe"`
+	ExpireTime int64 `gorm:"not null" json:"expire_time"`
+	Title     string `gorm:"not null" json:"title"`
+	GetCode   string `gorm:"not null" json:"get_code"`
+	FileName  string `gorm:"not null" json:"file_name"`
+	FileSize  int64  `gorm:"not null" json:"file_size"`
+	CreatedAt int64  `gorm:"autoCreateAt" json:"created_at"`
+	UpdatedAt int64  `gorm:"autoUpdateAt" json:"updated_at"`
+}
 type TransferRepo interface {
 	UploadEntry(ctx context.Context, u *pb.ReqUpload) (*pb.RespUpload, error)
 	DownloadEntry(ctx context.Context, u *pb.ReqDownload) (*pb.RespDownload, error)

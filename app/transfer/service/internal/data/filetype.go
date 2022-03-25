@@ -1,6 +1,7 @@
 package data
 
 var TypeMap = map[string]string{
+	"jpeg":"img",
 	"jpg":"img",
 	"png":"img",
 	"gif":"img",

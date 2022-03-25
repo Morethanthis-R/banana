@@ -21,16 +21,21 @@ var transferService *service.TransferService
 func apiV1(group gin.IRoutes, tf *service.TransferService) {
 	transferService = tf
 	group.GET("/download", DownloadHandler)
+	group.GET("/code-download",GetCodeDownload)
 	group.Use(middleware.JWTAuth())
 	group.GET("/file-list", GetUserFileList)
-	group.GET("/del-file", DeleteFile)
-	group.GET("/share", ShareFile)
+	group.POST("/del-file", DeleteFile)
+	group.POST("/share", ShareFile)
 	group.GET("/preview", PreviewFile)
 	group.GET("/census", FileCensus)
 	group.GET("/trash-list",GetUserTrashList)
-	group.GET("/del-dir",DeleteDirs)
+	group.POST("/del-dir",DeleteDirs)
 	group.POST("/withdraw-file",WithDrawFile)
 	group.POST("/withdraw-dir",WithDrawDir)
+	group.POST("/add-dir",CreateDir)
+	group.POST("/clean-file",CleanFiles)
+	group.POST("/clean-dir",CleanDirs)
+
 }
 
 /// 解析多个文件上传中，每个具体的文件的信息
@@ -178,6 +183,107 @@ func ParseFromHead(readData []byte, readTotal int, boundary []byte, stream io.Re
 	return fileHeader, nil, fmt.Errorf("reach to sream EOF")
 }
 
+func GuestUpload (c *gin.Context) {
+	var contentLength int64
+	contentLength = c.Request.ContentLength
+	if contentLength <= 0 || contentLength > 1024*1024*1024*2 {
+		util.Println("contentLength error\n")
+		response.NewErrWithCodeAndMsg(c, 200, "contentLength error")
+		return
+	}
+	contentType_, has_key := c.Request.Header["Content-Type"]
+	if !has_key {
+		util.Println("Content-Type error\n")
+		response.NewErrWithCodeAndMsg(c, 200, "Content-Type error")
+		return
+	}
+	if len(contentType_) != 1 {
+		util.Println("Content-Type count error\\n")
+		response.NewErrWithCodeAndMsg(c, 200, "Content-Type count error")
+		return
+	}
+	contentType := contentType_[0]
+	const BOUNDARY string = "; boundary="
+	loc := strings.Index(contentType, BOUNDARY)
+	if -1 == loc {
+		util.Println("Content-Type error, no boundary\n")
+		response.NewErrWithCodeAndMsg(c, 200, "Content-Type error, no boundary")
+		return
+	}
+	boundary := []byte(contentType[(loc + len(BOUNDARY)):])
+	//
+	readData := make([]byte, 1024*12)
+	var readTotal int = 0
+	fileMap := make(map[string]string)
+	for {
+		fileHeader, fileData, err := ParseFromHead(readData, readTotal, append(boundary, []byte("\r\n")...), c.Request.Body)
+		if err != nil {
+			util.Println(err)
+			response.NewErrWithCodeAndMsg(c, 200, err.Error())
+			return
+		}
+		f, err := os.Create(fileHeader.FileName)
+		if err != nil {
+			util.Println(err)
+			response.NewErrWithCodeAndMsg(c, 200, err.Error())
+			return
+		}
+		f.Write(fileData)
+		fileMap[fileHeader.FileName] = fileHeader.ContentType
+		fileData = nil
+		//需要反复搜索boundary
+		temp_data, reach_end, err := ReadToBoundary(boundary, c.Request.Body, f)
+		f.Close()
+
+		if err != nil {
+			util.Println(err)
+			response.NewErrWithCodeAndMsg(c, 200, err.Error())
+			return
+		}
+		if reach_end {
+			break
+		} else {
+			copy(readData[0:], temp_data)
+			readTotal = len(temp_data)
+			continue
+		}
+	}
+
+
+	//type params struct {
+	//	ExpireTime int64 `form:"expire_time"`
+	//}
+	//query := &params{}
+	//if err := c.BindQuery(query);err != nil {
+	//	response.NewErrWithCodeAndMsg(c, 200, err.Error())
+	//}
+	fid := []int32{}
+	for k, v := range fileMap {
+		f,err := os.Open(k)
+		f.Seek(0, 0)
+		filehash := util.FileSha1(f)
+		f.Seek(0, 0)
+		req := &pb.ReqGuestUpload{
+			File: &pb.File{
+				Filename: k,
+				FileHash: filehash,
+				ContentType: v,
+			},
+		}
+		res, err := transferService.GuestUpload(c, req)
+		if err != nil {
+			response.NewErrWithCodeAndMsg(c, 200, err.Error())
+			return
+		}
+		fid = append(fid,res.Fid)
+		os.Remove(k)
+	}
+	//
+	response.NewSuccess(c, gin.H{
+		"message": "success",
+		"fids": fid,
+	})
+}
 func UploadHandler(c *gin.Context) {
 	var contentLength int64
 	contentLength = c.Request.ContentLength
@@ -246,13 +352,15 @@ func UploadHandler(c *gin.Context) {
 		}
 	}
 
-	directroy:=c.Request.Header.Get("Directory")
-	if directroy!= ""{
-		if strings.Contains(directroy,"_") ==true{
-			response.NewErrWithCodeAndMsg(c, 200, "非法路径，路径包含字符\"_\"")
-			return
-		}
-	}
+	//directroy:=c.Request.Header.Get("Directory")
+	//if directroy!= ""{
+	//	if strings.Contains(directroy,"_") ==true{
+	//		response.NewErrWithCodeAndMsg(c, 200, "非法路径，路径包含字符\"_\"")
+	//		return
+	//	}
+	//}
+	did := c.Query("did")
+	dirId ,_:=strconv.Atoi(did)
 
 	for k, v := range fileMap {
 		f,err := os.Open(k)
@@ -265,16 +373,17 @@ func UploadHandler(c *gin.Context) {
 				FileHash: filehash,
 				ContentType: v,
 			},
-			Directory: directroy,
+			Did: int32(dirId),
 		}
 		res, err := transferService.UploadEntry(c, req)
+		os.Remove(k)
 		if err != nil {
 			response.NewErrWithCodeAndMsg(c, 200, err.Error())
 			return
 		}else{
 			fileIds = append(fileIds, int(res.Fid))
 		}
-		os.Remove(k)
+
 	}
 	//
 	response.NewSuccess(c, gin.H{
@@ -491,16 +600,10 @@ func GetUserFileList(c *gin.Context) {
 
 func DeleteDirs(c *gin.Context){
 	req := &pb.ReqDeleteDir{}
-	type ParseForm struct {
-		Did []int32 `form:"did"`
-	}
-	dids := &ParseForm{}
-	if err := c.ShouldBindQuery(dids);err != nil {
+	if err := c.BindJSON(req);err != nil {
 		response.NewErrWithCodeAndMsg(c,200,"传参格式错误")
 		return
 	}
-
-	req.Did = dids.Did
 	res,err := transferService.DeleteDir(c,req)
 	if err !=nil{
 		response.NewErrWithCodeAndMsg(c,200,err.Error())
@@ -513,16 +616,10 @@ func DeleteDirs(c *gin.Context){
 }
 func DeleteFile(c *gin.Context) {
 	req := &pb.ReqDeleteFile{}
-
-	type ParseForm struct {
-		Fid []int32 `form:"fid"`
-	}
-	fids := &ParseForm{}
-	if err := c.ShouldBindQuery(fids);err != nil {
+	if err := c.BindJSON(req);err != nil {
 		response.NewErrWithCodeAndMsg(c,200,"传参格式错误")
 		return
 	}
-	req.Fid = fids.Fid
 	res,err := transferService.DeleteFile(c,req)
 	if err !=nil{
 		response.NewErrWithCodeAndMsg(c,200,err.Error())
@@ -532,9 +629,44 @@ func DeleteFile(c *gin.Context) {
 		"message": res.Message,
 	})
 }
-
+func CleanDirs(c *gin.Context){
+	req := &pb.ReqCleanTrashDir{}
+	if err := c.ShouldBindJSON(req);err != nil {
+		response.NewErrWithCodeAndMsg(c,200,"传参格式错误")
+		return
+	}
+	res,err := transferService.CleanTrashDir(c,req)
+	if err != nil {
+		response.NewErrWithCodeAndMsg(c,200,err.Error())
+		return
+	}
+	response.NewSuccess(c,res)
+}
+func CleanFiles(c *gin.Context){
+	req := &pb.ReqCleanTrashFile{}
+	if err := c.ShouldBindJSON(req);err != nil {
+		response.NewErrWithCodeAndMsg(c,200,"传参格式错误")
+		return
+	}
+	res,err := transferService.CleanTrashFile(c,req)
+	if err != nil {
+		response.NewErrWithCodeAndMsg(c,200,err.Error())
+		return
+	}
+	response.NewSuccess(c,res)
+}
 func ShareFile(c *gin.Context) {
-
+	req := &pb.ReqShareFileStr{}
+	if err := c.ShouldBindJSON(req);err != nil {
+		response.NewErrWithCodeAndMsg(c,200,"传参格式错误")
+		return
+	}
+	res,err := transferService.ShareFile(c,req)
+	if err != nil {
+		response.NewErrWithCodeAndMsg(c,200,err.Error())
+		return
+	}
+	response.NewSuccess(c,res)
 }
 func FileCensus(c *gin.Context) {
 	req := &pb.ReqFileCensus{}
@@ -545,4 +677,36 @@ func FileCensus(c *gin.Context) {
 	}
 	response.NewSuccess(c,res)
 
+}
+func CreateDir(c *gin.Context){
+	req := &pb.ReqCreateDir{}
+	if err := c.ShouldBindJSON(req);err != nil {
+		response.NewErrWithCodeAndMsg(c,200,"传参格式错误")
+		return
+	}
+	res,err := transferService.CreateDir(c,req)
+	if err != nil {
+		response.NewErrWithCodeAndMsg(c,200,err.Error())
+		return
+	}
+	response.NewSuccess(c,res)
+}
+
+func GetCodeDownload(c *gin.Context){
+	req := &pb.ReqGetCodeDownLoad{}
+	type params struct {
+		GetCode string `form:"get_code"`
+	}
+	query := &params{}
+	if err := c.ShouldBindQuery(query);err != nil {
+		response.NewErrWithCodeAndMsg(c,200,"传参格式错误")
+		return
+	}
+	req.GetCode = query.GetCode
+	res,err := transferService.GetCodeDownload(c,req)
+	if err != nil {
+		response.NewErrWithCodeAndMsg(c,200,err.Error())
+		return
+	}
+	response.NewSuccess(c,res)
 }
