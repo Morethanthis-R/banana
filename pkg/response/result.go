@@ -128,5 +128,5 @@ func NewErrWithCodeAndMsg(c *gin.Context, code int32, msg string) {
 		Msg:  msg,
 		Data: nil,
 	}
-	c.AbortWithStatusJSON(http.StatusForbidden, result)
+	c.AbortWithStatusJSON(http.StatusOK, result)
 }

@@ -30,6 +30,10 @@ type CommonClient interface {
 	UpdateNotifyType(ctx context.Context, in *ReqUpdateNotifyType, opts ...grpc.CallOption) (*RespUpdateNotifyType, error)
 	DeleteNotifyType(ctx context.Context, in *ReqDeleteNotifyType, opts ...grpc.CallOption) (*RespDeleteNotifyType, error)
 	GetNotifyTypeList(ctx context.Context, in *ReqGetNotifyTypeList, opts ...grpc.CallOption) (*RespGetNotifyTypeList, error)
+	CreateAdv(ctx context.Context, in *ReqCreateAdv, opts ...grpc.CallOption) (*RespCreateAdv, error)
+	DeleteAdv(ctx context.Context, in *ReqDeleteAdv, opts ...grpc.CallOption) (*RespDeleteAdv, error)
+	UpdateAdv(ctx context.Context, in *ReqUpdateAdv, opts ...grpc.CallOption) (*RespUpdateAdv, error)
+	GetAdvList(ctx context.Context, in *ReqGetAdvList, opts ...grpc.CallOption) (*RespGetAdvList, error)
 }
 
 type commonClient struct {
@@ -112,6 +116,42 @@ func (c *commonClient) GetNotifyTypeList(ctx context.Context, in *ReqGetNotifyTy
 	return out, nil
 }
 
+func (c *commonClient) CreateAdv(ctx context.Context, in *ReqCreateAdv, opts ...grpc.CallOption) (*RespCreateAdv, error) {
+	out := new(RespCreateAdv)
+	err := c.cc.Invoke(ctx, "/common.service.v1.Common/CreateAdv", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *commonClient) DeleteAdv(ctx context.Context, in *ReqDeleteAdv, opts ...grpc.CallOption) (*RespDeleteAdv, error) {
+	out := new(RespDeleteAdv)
+	err := c.cc.Invoke(ctx, "/common.service.v1.Common/DeleteAdv", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *commonClient) UpdateAdv(ctx context.Context, in *ReqUpdateAdv, opts ...grpc.CallOption) (*RespUpdateAdv, error) {
+	out := new(RespUpdateAdv)
+	err := c.cc.Invoke(ctx, "/common.service.v1.Common/UpdateAdv", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *commonClient) GetAdvList(ctx context.Context, in *ReqGetAdvList, opts ...grpc.CallOption) (*RespGetAdvList, error) {
+	out := new(RespGetAdvList)
+	err := c.cc.Invoke(ctx, "/common.service.v1.Common/GetAdvList", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // CommonServer is the server API for Common service.
 // All implementations must embed UnimplementedCommonServer
 // for forward compatibility
@@ -124,6 +164,10 @@ type CommonServer interface {
 	UpdateNotifyType(context.Context, *ReqUpdateNotifyType) (*RespUpdateNotifyType, error)
 	DeleteNotifyType(context.Context, *ReqDeleteNotifyType) (*RespDeleteNotifyType, error)
 	GetNotifyTypeList(context.Context, *ReqGetNotifyTypeList) (*RespGetNotifyTypeList, error)
+	CreateAdv(context.Context, *ReqCreateAdv) (*RespCreateAdv, error)
+	DeleteAdv(context.Context, *ReqDeleteAdv) (*RespDeleteAdv, error)
+	UpdateAdv(context.Context, *ReqUpdateAdv) (*RespUpdateAdv, error)
+	GetAdvList(context.Context, *ReqGetAdvList) (*RespGetAdvList, error)
 	mustEmbedUnimplementedCommonServer()
 }
 
@@ -154,6 +198,18 @@ func (UnimplementedCommonServer) DeleteNotifyType(context.Context, *ReqDeleteNot
 }
 func (UnimplementedCommonServer) GetNotifyTypeList(context.Context, *ReqGetNotifyTypeList) (*RespGetNotifyTypeList, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetNotifyTypeList not implemented")
+}
+func (UnimplementedCommonServer) CreateAdv(context.Context, *ReqCreateAdv) (*RespCreateAdv, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateAdv not implemented")
+}
+func (UnimplementedCommonServer) DeleteAdv(context.Context, *ReqDeleteAdv) (*RespDeleteAdv, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteAdv not implemented")
+}
+func (UnimplementedCommonServer) UpdateAdv(context.Context, *ReqUpdateAdv) (*RespUpdateAdv, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateAdv not implemented")
+}
+func (UnimplementedCommonServer) GetAdvList(context.Context, *ReqGetAdvList) (*RespGetAdvList, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetAdvList not implemented")
 }
 func (UnimplementedCommonServer) mustEmbedUnimplementedCommonServer() {}
 
@@ -312,6 +368,78 @@ func _Common_GetNotifyTypeList_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Common_CreateAdv_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReqCreateAdv)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CommonServer).CreateAdv(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/common.service.v1.Common/CreateAdv",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CommonServer).CreateAdv(ctx, req.(*ReqCreateAdv))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Common_DeleteAdv_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReqDeleteAdv)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CommonServer).DeleteAdv(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/common.service.v1.Common/DeleteAdv",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CommonServer).DeleteAdv(ctx, req.(*ReqDeleteAdv))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Common_UpdateAdv_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReqUpdateAdv)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CommonServer).UpdateAdv(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/common.service.v1.Common/UpdateAdv",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CommonServer).UpdateAdv(ctx, req.(*ReqUpdateAdv))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Common_GetAdvList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReqGetAdvList)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CommonServer).GetAdvList(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/common.service.v1.Common/GetAdvList",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CommonServer).GetAdvList(ctx, req.(*ReqGetAdvList))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Common_ServiceDesc is the grpc.ServiceDesc for Common service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -350,6 +478,22 @@ var Common_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetNotifyTypeList",
 			Handler:    _Common_GetNotifyTypeList_Handler,
+		},
+		{
+			MethodName: "CreateAdv",
+			Handler:    _Common_CreateAdv_Handler,
+		},
+		{
+			MethodName: "DeleteAdv",
+			Handler:    _Common_DeleteAdv_Handler,
+		},
+		{
+			MethodName: "UpdateAdv",
+			Handler:    _Common_UpdateAdv_Handler,
+		},
+		{
+			MethodName: "GetAdvList",
+			Handler:    _Common_GetAdvList_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -19,6 +19,7 @@ type File struct {
 	ContentType   string `gorm:"type:varchar(256)" json:"content_type"`
 	Suffix        string `gorm:"type:varchar(10)" json:"suffix"`
 	DownloadCount int    `gorm:"default:0" json:"download_count"`
+	Finish        int    `gorm:"type:tinyint(5);default:0" json:"finish"`
 	CreatedAt     int64  `gorm:"autoCreateAt" json:"created_at"`
 	UpdatedAt     int64  `gorm:"autoUpdateAt" json:"updated_at"`
 }

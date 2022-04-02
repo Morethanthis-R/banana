@@ -43,23 +43,26 @@ func JWTAuth() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		cache := NewCache()
-		key := fmt.Sprintf("account:cookie:id:%d", claims.UserId)
-		res,err := cache.Get(c, key).Result()
-		if err != nil {
-			c.JSON(200, gin.H{
-				"message": "检验失败",
-			})
-			c.Abort()
-			return
+		if claims.UserRole != 2{
+			cache := NewCache()
+			key := fmt.Sprintf("account:cookie:id:%d", claims.UserId)
+			res,err := cache.Get(c, key).Result()
+			if err != nil {
+				c.JSON(200, gin.H{
+					"message": "检验失败",
+				})
+				c.Abort()
+				return
+			}
+			if res != claims.Id{
+				c.JSON(200, gin.H{
+					"message": "该token不合法",
+				})
+				c.Abort()
+				return
+			}
 		}
-		if res != claims.Id{
-			c.JSON(200, gin.H{
-				"message": "该token不合法",
-			})
-			c.Abort()
-			return
-		}
+
 		if time.Now().Unix() > claims.ExpiresAt {
 			c.JSON(200, gin.H{
 				"message": "token已过期",

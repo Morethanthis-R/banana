@@ -23,13 +23,20 @@ func initApp(confServer *conf.Server, registry *conf.Registry, confData *conf.Da
 	if err != nil {
 		return nil, nil, err
 	}
-	transferRepo := data.NewTransferRepo(dataData, logger)
+	rabbitMQ, cleanup2, err := data.NewRabbitMqProducer(confData, logger)
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	transferRepo := data.NewTransferRepo(dataData, logger, rabbitMQ)
 	transferCase := biz.NewTransferCase(transferRepo, logger)
 	transferService := service.NewTransferService(transferCase, logger)
-	httpServer := server.NewHTTPServer(confServer, transferService)
+	mqService := service.NewMqService(rabbitMQ, dataData)
+	httpServer := server.NewHTTPServer(confServer, transferService, mqService)
 	registrar := server.NewRegistrar(registry)
 	app := newApp(logger, httpServer, registrar)
 	return app, func() {
+		cleanup2()
 		cleanup()
 	}, nil
 }

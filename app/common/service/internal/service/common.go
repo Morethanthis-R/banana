@@ -39,3 +39,17 @@ func (s *CommonService) DeleteNotifyType(ctx context.Context, req *pb.ReqDeleteN
 func (s *CommonService) GetNotifyTypeList(ctx context.Context, req *pb.ReqGetNotifyTypeList) (*pb.RespGetNotifyTypeList, error) {
 	return s.cm.GetNTypeList(ctx,req)
 }
+func (s *CommonService) CreateAdv(ctx context.Context,req *pb.ReqCreateAdv)(*pb.RespCreateAdv,error){
+	return s.cm.CreateAdv(ctx,req)
+}
+
+func (s *CommonService) DeleteAdv(ctx context.Context,req *pb.ReqDeleteAdv)(*pb.RespDeleteAdv,error){
+	return s.cm.DeleteAdv(ctx,req)
+}
+func (s *CommonService) UpdateAdv(ctx context.Context,req *pb.ReqUpdateAdv)(*pb.RespUpdateAdv,error){
+	return s.cm.UpdateAdv(ctx,req)
+}
+
+func (s *CommonService) GetAdvList(ctx context.Context,req *pb.ReqGetAdvList)(*pb.RespGetAdvList,error){
+	return s.cm.GetAdvList(ctx,req)
+}

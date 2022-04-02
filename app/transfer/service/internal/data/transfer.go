@@ -7,6 +7,7 @@ import (
 	"banana/pkg/middleware"
 	"banana/pkg/util"
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/minio/minio-go/v7"
@@ -14,12 +15,14 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 )
 
 var _ biz.TransferRepo = (*transferRepo)(nil)
 
 type transferRepo struct {
+	mq   *RabbitMQ
 	data *Data
 	log  *log.Helper
 }
@@ -43,25 +46,35 @@ const (
 	SIZE = 3
 )
 
-func NewTransferRepo(data *Data, logger log.Logger) biz.TransferRepo {
+func NewTransferRepo(data *Data, logger log.Logger, mq *RabbitMQ) biz.TransferRepo {
 	return &transferRepo{
+		mq : mq,
 		data: data,
 		log:  log.NewHelper(log.With(logger, "module", "data/tf")),
 	}
 }
+type Produce struct {
+	msgContent string
+}
+// 实现发送者
+func (t *Produce) MsgContent() string {
+	return t.msgContent
+}
+
 func (t *transferRepo) GuestUpload(ctx context.Context, req *pb.ReqGuestUpload) (*pb.RespGuestUpload, error) {
+
 	//id := ctx.Value("x-md-global-uid").(int)
 	res := &pb.RespGuestUpload{}
 	claims := ctx.Value("claims").(*middleware.Claims)
 	var err error
-	fileinfo := minio.UploadInfo{}
+	//fileinfo := minio.UploadInfo{}
 	filetype := util.String2StringArrWithSeparate(req.File.Filename, ".", true)
 	finalName := fmt.Sprintf("%s.%s", req.File.FileHash, filetype[len(filetype)-1])
 
 	//快传检索
 	checkFile := &biz.File{}
 	if req.File.FileHash != "" {
-		err = t.data.db.Model(&biz.File{}).Where("file_hash = ? and file_status = ?", req.File.FileHash,EXIST).First(checkFile).Error
+		err = t.data.Db.Model(&biz.File{}).Where("file_hash = ? and file_status = ?", req.File.FileHash,EXIST).First(checkFile).Error
 		if err != nil && err.Error() != "record not found" {
 			t.log.Error(err)
 			return nil, ecode.MYSQL_ERR
@@ -69,7 +82,7 @@ func (t *transferRepo) GuestUpload(ctx context.Context, req *pb.ReqGuestUpload) 
 
 		if checkFile.ID != 0 {
 			userFile := &biz.UserFile{}
-			err = t.data.db.Model(&biz.UserFile{}).Where("file_id = ?", checkFile.ID).Last(userFile).Error
+			err = t.data.Db.Model(&biz.UserFile{}).Where("file_id = ?", checkFile.ID).Last(userFile).Error
 			if err != nil && err.Error() != "record not found" {
 				t.log.Error(err)
 				return nil, ecode.MYSQL_ERR
@@ -79,7 +92,7 @@ func (t *transferRepo) GuestUpload(ctx context.Context, req *pb.ReqGuestUpload) 
 				return res,nil
 			}
 			if userFile.ID != 0 {
-				client := t.data.minio_internal
+				client := t.data.Minio_internal
 				bucket := PUBLIC
 				if userFile.UserId != 0 {
 					bucket = PRIVATE
@@ -115,7 +128,7 @@ func (t *transferRepo) GuestUpload(ctx context.Context, req *pb.ReqGuestUpload) 
 					ContentType: req.File.ContentType,
 					Suffix:      filetype[len(filetype)-1],
 				}
-				err = t.data.db.Model(&biz.File{}).Create(newFile).Error
+				err = t.data.Db.Model(&biz.File{}).Create(newFile).Error
 				if err != nil {
 					t.log.Error(err)
 					return nil, ecode.MYSQL_ERR.SetMessage(err.Error())
@@ -124,7 +137,7 @@ func (t *transferRepo) GuestUpload(ctx context.Context, req *pb.ReqGuestUpload) 
 					FileId:  newFile.ID,
 					UserNum: claims.UserNum,
 				}
-				err = t.data.db.Model(&biz.UserFile{}).Create(newUFile).Error
+				err = t.data.Db.Model(&biz.UserFile{}).Create(newUFile).Error
 				if err != nil {
 					t.log.Error(err)
 					return nil, ecode.MYSQL_ERR.SetMessage(err.Error())
@@ -135,43 +148,63 @@ func (t *transferRepo) GuestUpload(ctx context.Context, req *pb.ReqGuestUpload) 
 		}
 
 	}
-	var minioUpload = func(bucket, objectName string) (minio.UploadInfo, error) {
-		client := t.data.minio_internal
-		fileinfo, err = client.FPutObject(ctx, bucket, objectName, req.File.Filename, minio.PutObjectOptions{ContentType: req.File.ContentType})
-		if err != nil {
-			t.log.Error(err)
-			return fileinfo, err
-		}
-		return fileinfo, err
-	}
-	fileinfo, err = minioUpload(PUBLIC, finalName)
-	if err != nil {
-		t.log.Error(err)
-		return res, ecode.New(500).SetMessage("minio客户端错误")
-	}
+	//var minioUpload = func(bucket, objectName string) (minio.UploadInfo, error) {
+	//	client := t.data.Minio_internal
+	//	fileinfo, err = client.FPutObject(ctx, bucket, objectName, req.File.Filename, minio.PutObjectOptions{ContentType: req.File.ContentType})
+	//	if err != nil {
+	//		t.log.Error(err)
+	//		return fileinfo, err
+	//	}
+	//	return fileinfo, err
+	//}
+	//fileinfo, err = minioUpload(PUBLIC, finalName)
+	//if err != nil {
+	//	t.log.Error(err)
+	//	return res, ecode.New(500).SetMessage("minio客户端错误")
+	//}
+
 	attribute := 2
 	file := &biz.File{
 		FileName:    req.File.Filename,
 		FileHash:    req.File.FileHash,
 		FilePath:    finalName,
-		FileSize:    fileinfo.Size,
+		FileSize:    0,//fileinfo.Size,
 		FileStr:     "",
 		Attribute:   int8(attribute),
 		Suffix:      filetype[len(filetype)-1],
 		ContentType: req.File.ContentType,
 	}
-	err = t.data.db.Model(&biz.File{}).WithContext(ctx).Create(file).Error
+	err = t.data.Db.Model(&biz.File{}).WithContext(ctx).Create(file).Error
 	if err != nil {
 		t.log.Error(err)
 		return res, ecode.MYSQL_ERR
 	}
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		obj := MessageObject{
+			Fid:         file.ID,
+			FileName:    file.FileName,
+			FileHash:    file.FileHash,
+			FileStr:     file.FileStr,
+			FilePath:    file.FilePath,
+			ContentType: file.ContentType,
+			Bucket:      PUBLIC,
+		}
+		msg ,_:= json.Marshal(obj)
+		produce := &Produce{msgContent: string(msg)}
+		t.mq.RegisterProducer(produce)
+		wg.Done()
+	}()
+	wg.Wait()
+
 
 	userFile := &biz.UserFile{
 		FileId:  file.ID,
 		UserNum: claims.UserNum,
 		UserId:  claims.UserId,
 	}
-	err = t.data.db.Model(&biz.UserFile{}).WithContext(ctx).Create(userFile).Error
+	err = t.data.Db.Model(&biz.UserFile{}).WithContext(ctx).Create(userFile).Error
 	if err != nil {
 		t.log.Error(err)
 		return res, ecode.MYSQL_ERR
@@ -189,7 +222,7 @@ func (t *transferRepo) GetCodeDownload(ctx context.Context, req *pb.ReqGetCodeDo
 	}
 	res.DownloadStr = url
 	shareHis := &biz.ShareHistory{}
-	err = t.data.db.Model(&biz.ShareHistory{}).Where("get_code = ?", req.GetCode).First(shareHis).Error
+	err = t.data.Db.Model(&biz.ShareHistory{}).Where("get_code = ?", req.GetCode).First(shareHis).Error
 	if err != nil {
 		return res, ecode.MYSQL_ERR.SetMessage(err.Error())
 	}
@@ -213,7 +246,7 @@ func (t *transferRepo) UploadEntry(ctx context.Context, req *pb.ReqUpload) (*pb.
 	//首先找到用户根目录
 	directory := &biz.UserDirectory{}
 	if id != 0 {
-		err = t.data.db.Model(&biz.UserDirectory{}).Where("user_id =? and father_id=?", id, 0).First(directory).Error
+		err = t.data.Db.Model(&biz.UserDirectory{}).Where("user_id =? and father_id=?", id, 0).First(directory).Error
 		if err != nil && err.Error() != "record not found" {
 			t.log.Error(err)
 			return nil, ecode.MYSQL_ERR
@@ -225,13 +258,13 @@ func (t *transferRepo) UploadEntry(ctx context.Context, req *pb.ReqUpload) (*pb.
 			directory.FatherId = 0
 			directory.PathStr = fmt.Sprintf("%s/", claims.UserNum)
 			directory.Key = util.GetRandomDirString(40)
-			err = t.data.db.Model(&biz.UserDirectory{}).Create(directory).Error
+			err = t.data.Db.Model(&biz.UserDirectory{}).Create(directory).Error
 			if err != nil {
 				t.log.Error(err)
 				return nil, ecode.MYSQL_ERR
 			}
 			directory.PathTree = fmt.Sprintf("%d/",directory.ID)
-			err = t.data.db.Model(&biz.UserDirectory{}).Where("id = ?",directory.ID).Save(directory).Error
+			err = t.data.Db.Model(&biz.UserDirectory{}).Where("id = ?",directory.ID).Save(directory).Error
 			if err != nil {
 				t.log.Error(err)
 				return nil, ecode.MYSQL_ERR
@@ -241,7 +274,7 @@ func (t *transferRepo) UploadEntry(ctx context.Context, req *pb.ReqUpload) (*pb.
 	//快传检索
 	checkFile := &biz.File{}
 	if req.File.FileHash != "" {
-		err = t.data.db.Model(&biz.File{}).Where("file_hash = ? and file_status = ?", req.File.FileHash,EXIST).Last(checkFile).Error
+		err = t.data.Db.Model(&biz.File{}).Where("file_hash = ? and file_status = ?", req.File.FileHash,EXIST).Last(checkFile).Error
 		if err != nil && err.Error() != "record not found" {
 			t.log.Error(err)
 			return nil, ecode.MYSQL_ERR
@@ -249,7 +282,7 @@ func (t *transferRepo) UploadEntry(ctx context.Context, req *pb.ReqUpload) (*pb.
 		if checkFile.FileHash != "" {
 			dir := &biz.UserDirectory{}
 			if req.Did != 0 {
-				err = t.data.db.Model(&biz.UserDirectory{}).Where("id = ? and user_id =?", req.Did, id).First(dir).Error
+				err = t.data.Db.Model(&biz.UserDirectory{}).Where("id = ? and user_id =?", req.Did, id).First(dir).Error
 				if err != nil {
 					t.log.Error(err)
 					return nil, ecode.MYSQL_ERR
@@ -258,7 +291,7 @@ func (t *transferRepo) UploadEntry(ctx context.Context, req *pb.ReqUpload) (*pb.
 				dir = directory
 			}
 			samePathFile := &biz.File{}
-			err = t.data.db.Model(&biz.File{}).Where("file_path = ? and file_status = ?", fmt.Sprintf("%s%s", dir.PathStr, finalName),EXIST).First(&samePathFile).Error
+			err = t.data.Db.Model(&biz.File{}).Where("file_path = ? and file_status = ?", fmt.Sprintf("%s%s", dir.PathStr, finalName),EXIST).First(&samePathFile).Error
 			if err != nil && err.Error() != "record not found" {
 				t.log.Error(err)
 				return nil, ecode.MYSQL_ERR
@@ -269,7 +302,7 @@ func (t *transferRepo) UploadEntry(ctx context.Context, req *pb.ReqUpload) (*pb.
 		}
 		if checkFile.ID != 0 {
 			userFile := &biz.UserFile{}
-			err = t.data.db.Model(&biz.UserFile{}).Where("file_id = ?", checkFile.ID).Last(userFile).Error
+			err = t.data.Db.Model(&biz.UserFile{}).Where("file_id = ?", checkFile.ID).Last(userFile).Error
 			if err != nil && err.Error() != "record not found" {
 				t.log.Error(err)
 				return nil, ecode.MYSQL_ERR
@@ -277,7 +310,7 @@ func (t *transferRepo) UploadEntry(ctx context.Context, req *pb.ReqUpload) (*pb.
 			if userFile.ID != 0 {
 				dir := &biz.UserDirectory{}
 				if req.Did != 0 {
-					err = t.data.db.Model(&biz.UserDirectory{}).Where("id = ? and user_id = ?", req.Did, id).Find(dir).Error
+					err = t.data.Db.Model(&biz.UserDirectory{}).Where("id = ? and user_id = ?", req.Did, id).Find(dir).Error
 					if err != nil {
 						t.log.Error(err)
 						return nil, ecode.MYSQL_ERR.SetMessage(err.Error())
@@ -287,7 +320,7 @@ func (t *transferRepo) UploadEntry(ctx context.Context, req *pb.ReqUpload) (*pb.
 				}
 
 				copyPath := fmt.Sprintf("%s%s", dir.PathStr, finalName)
-				client := t.data.minio_internal
+				client := t.data.Minio_internal
 				bucket := PUBLIC
 
 				if userFile.UserId != 0 {
@@ -319,7 +352,7 @@ func (t *transferRepo) UploadEntry(ctx context.Context, req *pb.ReqUpload) (*pb.
 					ContentType: req.File.ContentType,
 					Suffix:      filetype[len(filetype)-1],
 				}
-				err = t.data.db.Model(&biz.File{}).Create(newFile).Error
+				err = t.data.Db.Model(&biz.File{}).Create(newFile).Error
 				if err != nil {
 					t.log.Error(err)
 					return nil, ecode.MYSQL_ERR.SetMessage(err.Error())
@@ -330,7 +363,7 @@ func (t *transferRepo) UploadEntry(ctx context.Context, req *pb.ReqUpload) (*pb.
 					DirectoryId: dir.ID,
 					UserNum:     claims.UserNum,
 				}
-				err = t.data.db.Model(&biz.UserFile{}).Create(newUFile).Error
+				err = t.data.Db.Model(&biz.UserFile{}).Create(newUFile).Error
 				if err != nil {
 					t.log.Error(err)
 					return nil, ecode.MYSQL_ERR.SetMessage(err.Error())
@@ -338,7 +371,7 @@ func (t *transferRepo) UploadEntry(ctx context.Context, req *pb.ReqUpload) (*pb.
 
 				dirs := []*biz.UserDirectory{}
 				if dir.Name == claims.UserNum {
-					err = t.data.db.Model(&biz.UserDirectory{}).Where("user_id = ? and father_id = ?", id, 0).Find(&dirs).Error
+					err = t.data.Db.Model(&biz.UserDirectory{}).Where("user_id = ? and father_id = ?", id, 0).Find(&dirs).Error
 					if err != nil {
 						t.log.Error(err)
 						return nil, ecode.MYSQL_ERR
@@ -347,7 +380,7 @@ func (t *transferRepo) UploadEntry(ctx context.Context, req *pb.ReqUpload) (*pb.
 					fatherId := dir.FatherId
 					for fatherId != 0 {
 						temp := &biz.UserDirectory{}
-						err = t.data.db.Model(&biz.UserDirectory{}).Where("id = ?", fatherId).First(temp).Error
+						err = t.data.Db.Model(&biz.UserDirectory{}).Where("id = ?", fatherId).First(temp).Error
 						if err != nil {
 							t.log.Error(err)
 							return nil, ecode.MYSQL_ERR
@@ -361,63 +394,81 @@ func (t *transferRepo) UploadEntry(ctx context.Context, req *pb.ReqUpload) (*pb.
 				for _, v := range dirs {
 					v.Size += checkFile.FileSize
 				}
-				err = t.data.db.Model(&biz.UserDirectory{}).Save(&dirs).Error
+				err = t.data.Db.Model(&biz.UserDirectory{}).Save(&dirs).Error
 				if err != nil {
 					t.log.Error(err)
 					return nil, ecode.MYSQL_ERR
 				}
 				res.Fid = int32(newFile.ID)
+				os.Remove(req.File.Filename)
 				return res, nil
 			}
 		}
-
 	}
 
-	filepath := fmt.Sprintf("./%s", req.File.Filename)
-	fileinfo := minio.UploadInfo{}
-	var minioUpload = func(bucket, objectName string) (minio.UploadInfo, error) {
-		client := t.data.minio_internal
-		fileinfo, err = client.FPutObject(ctx, bucket, objectName, filepath, minio.PutObjectOptions{ContentType: req.File.ContentType})
-		if err != nil {
-			t.log.Error(err)
-			return fileinfo, err
-		}
-		return fileinfo, err
-	}
+	//filepath := fmt.Sprintf("./%s", req.File.Filename)
+	//fileinfo := minio.UploadInfo{}
+	//var minioUpload = func(bucket, objectName string) (minio.UploadInfo, error) {
+	//	client := t.data.Minio_internal
+	//	fileinfo, err = client.FPutObject(ctx, bucket, objectName, filepath, minio.PutObjectOptions{ContentType: req.File.ContentType})
+	//	if err != nil {
+	//		t.log.Error(err)
+	//		return fileinfo, err
+	//	}
+	//	return fileinfo, err
+	//}
 
 	//私人文件入库
 	locDir := &biz.UserDirectory{}
 	if req.Did == 0 {
 		locDir = directory
 	} else {
-		err = t.data.db.Model(&biz.UserDirectory{}).Where("id = ? and user_id = ?", req.Did, id).First(&locDir).Error
+		err = t.data.Db.Model(&biz.UserDirectory{}).Where("id = ? and user_id = ?", req.Did, id).First(&locDir).Error
 		if err != nil {
 			t.log.Error(err)
 			return nil, ecode.MYSQL_ERR
 		}
 	}
 	finalName = fmt.Sprintf("%s%s", locDir.PathStr, finalName)
-	fileinfo, err = minioUpload(PRIVATE, finalName)
-	if err != nil {
-		t.log.Error(err)
-		return nil, ecode.New(500).SetMessage("minio客户端错误")
-	}
+	//fileinfo, err = minioUpload(PRIVATE, finalName)
+	//if err != nil {
+	//	t.log.Error(err)
+	//	return nil, ecode.New(500).SetMessage("minio客户端错误")
+	//}
 	file := &biz.File{
 		FileName:    req.File.Filename,
 		FileHash:    req.File.FileHash,
 		FilePath:    finalName,
-		FileSize:    fileinfo.Size,
+		FileSize:    req.File.Filesize,
 		FileStr:     fmt.Sprintf("%s%s", locDir.PathStr, req.File.Filename),
 		Attribute:   1,
 		Suffix:      filetype[len(filetype)-1],
 		ContentType: req.File.ContentType,
 		DirectoryId: locDir.ID,
 	}
-	err = t.data.db.Model(&biz.File{}).Create(file).Error
+	err = t.data.Db.Model(&biz.File{}).Create(file).Error
 	if err != nil {
 		t.log.Error(err)
 		return nil, ecode.MYSQL_ERR
 	}
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		obj := MessageObject{
+			Fid:         file.ID,
+			FileName:    file.FileName,
+			FileHash:    file.FileHash,
+			FileStr:     file.FileStr,
+			FilePath:    file.FilePath,
+			ContentType: file.ContentType,
+			Bucket:      PRIVATE,
+		}
+		msg ,_:= json.Marshal(obj)
+		produce := &Produce{msgContent: string(msg)}
+		t.mq.RegisterProducer(produce)
+		wg.Done()
+	}()
+	wg.Wait()
 	//文件存量统计
 	dirs := []*biz.UserDirectory{}
 	if req.Did == 0 {
@@ -426,7 +477,7 @@ func (t *transferRepo) UploadEntry(ctx context.Context, req *pb.ReqUpload) (*pb.
 		fatherId := locDir.FatherId
 		for fatherId != 0 {
 			temp := &biz.UserDirectory{}
-			err = t.data.db.Model(&biz.UserDirectory{}).Where("id = ?", fatherId).First(temp).Error
+			err = t.data.Db.Model(&biz.UserDirectory{}).Where("id = ?", fatherId).First(temp).Error
 			if err != nil {
 				t.log.Error(err)
 				return nil, ecode.MYSQL_ERR
@@ -438,9 +489,9 @@ func (t *transferRepo) UploadEntry(ctx context.Context, req *pb.ReqUpload) (*pb.
 		dirs = append(dirs, locDir)
 	}
 	for _, v := range dirs {
-		v.Size += fileinfo.Size
+		v.Size += req.File.Filesize
 	}
-	err = t.data.db.Model(&biz.UserDirectory{}).Save(&dirs).Error
+	err = t.data.Db.Model(&biz.UserDirectory{}).Save(&dirs).Error
 	if err != nil {
 		t.log.Error(err)
 		return nil, ecode.MYSQL_ERR
@@ -451,7 +502,7 @@ func (t *transferRepo) UploadEntry(ctx context.Context, req *pb.ReqUpload) (*pb.
 		UserId:      claims.UserId,
 		DirectoryId: locDir.ID,
 	}
-	err = t.data.db.Model(&biz.UserFile{}).WithContext(ctx).Create(userFile).Error
+	err = t.data.Db.Model(&biz.UserFile{}).WithContext(ctx).Create(userFile).Error
 	if err != nil {
 		t.log.Error(err)
 		return nil, ecode.MYSQL_ERR
@@ -466,12 +517,12 @@ func (t *transferRepo) DownloadEntry(ctx context.Context, req *pb.ReqDownload) (
 	//id := ctx.Value("x-md-global-uid").(int)
 	//claims:=ctx.Value("claims").(*middleware.Claims)
 	userFile := &biz.UserFile{}
-	err = t.data.db.Model(&biz.UserFile{}).Where("file_id = ?", req.Fid).First(userFile).Error
+	err = t.data.Db.Model(&biz.UserFile{}).Where("file_id = ?", req.Fid).First(userFile).Error
 	if err != nil {
 		return res, ecode.MYSQL_ERR
 	}
 	File := &biz.File{}
-	err = t.data.db.Model(&biz.File{}).Where("id = ?", req.Fid).First(File).Error
+	err = t.data.Db.Model(&biz.File{}).Where("id = ?", req.Fid).First(File).Error
 	if err != nil {
 		return res, ecode.MYSQL_ERR
 	}
@@ -495,7 +546,7 @@ func (t *transferRepo) DownloadEntry(ctx context.Context, req *pb.ReqDownload) (
 	}
 
 	File.DownloadCount += 1
-	err = t.data.db.Model(&biz.File{}).Where("id = ?", File.ID).Save(File).Error
+	err = t.data.Db.Model(&biz.File{}).Where("id = ?", File.ID).Save(File).Error
 	if err != nil {
 		return res, ecode.MYSQL_ERR
 	}
@@ -510,7 +561,7 @@ func (t *transferRepo) UploadStatic(ctx context.Context, req *pb.ReqStatic) (*pb
 	res := &pb.RespStatic{}
 	filepath := fmt.Sprintf("./%s", req.Filename)
 	objectName := fmt.Sprintf("/%s", req.Filename)
-	client := t.data.minio_internal
+	client := t.data.Minio_internal
 	fileinfo, err := client.FPutObject(ctx, STATIC, objectName, filepath, minio.PutObjectOptions{ContentType: req.ContentType})
 	fmt.Println(fileinfo.Size)
 	if err != nil {
@@ -546,12 +597,12 @@ func (t *transferRepo) GetUserFileTree(ctx context.Context, req *pb.ReqGetUserFi
 	father := &pb.DirFileNameAndId{Name: "根目录",Did: 0}
 	nameNId = append(nameNId,father)
 	if req.DirectoryId == 0 {
-		err = t.data.db.Model(&biz.UserDirectory{}).Where("user_id = ? and name = ?", id, claims.UserNum).First(root).Error
+		err = t.data.Db.Model(&biz.UserDirectory{}).Where("user_id = ? and name = ?", id, claims.UserNum).First(root).Error
 		if err != nil {
 			return res, ecode.MYSQL_ERR.SetMessage(err.Error())
 		}
 	} else {
-		err = t.data.db.Model(&biz.UserDirectory{}).Where("id = ? and dir_status = ?", req.DirectoryId, EXIST).First(root).Error
+		err = t.data.Db.Model(&biz.UserDirectory{}).Where("id = ? and dir_status = ?", req.DirectoryId, EXIST).First(root).Error
 		if err != nil {
 			return res, ecode.MYSQL_ERR.SetMessage(err.Error())
 		}
@@ -571,20 +622,20 @@ func (t *transferRepo) GetUserFileTree(ctx context.Context, req *pb.ReqGetUserFi
 	files := []*biz.File{}
 	if root.ID != 0 {
 		if keyWords == "" {
-			err = t.data.db.Model(&biz.File{}).Where("directory_id = ? and file_status = ?", root.ID, EXIST).Find(&files).Error
+			err = t.data.Db.Model(&biz.File{}).Where("directory_id = ? and file_status = ?", root.ID, EXIST).Find(&files).Error
 			if err != nil {
 				return res, ecode.MYSQL_ERR.SetMessage(err.Error())
 			}
-			err = t.data.db.Model(&biz.UserDirectory{}).Where("father_id = ? and dir_status = ?", root.ID, EXIST).Find(&childDir).Error
+			err = t.data.Db.Model(&biz.UserDirectory{}).Where("father_id = ? and dir_status = ?", root.ID, EXIST).Find(&childDir).Error
 			if err != nil && err.Error() != "record not found" {
 				return res, ecode.MYSQL_ERR.SetMessage(err.Error())
 			}
 		} else {
-			err = t.data.db.Model(&biz.File{}).Where("directory_id = ? and file_name like ? and file_status = ?", root.ID, "%"+keyWords+"%", EXIST).Find(&files).Error
+			err = t.data.Db.Model(&biz.File{}).Where("directory_id = ? and file_name like ? and file_status = ?", root.ID, "%"+keyWords+"%", EXIST).Find(&files).Error
 			if err != nil {
 				return res, ecode.MYSQL_ERR.SetMessage(err.Error())
 			}
-			err = t.data.db.Model(&biz.UserDirectory{}).Where("father_id = ? and name like ? and dir_status = ?", root.ID, "%"+keyWords+"%", EXIST).Find(&childDir).Error
+			err = t.data.Db.Model(&biz.UserDirectory{}).Where("father_id = ? and name like ? and dir_status = ?", root.ID, "%"+keyWords+"%", EXIST).Find(&childDir).Error
 			if err != nil && err.Error() != "record not found" {
 				return res, ecode.MYSQL_ERR.SetMessage(err.Error())
 			}
@@ -684,7 +735,7 @@ func (t *transferRepo) GetTrashBin(ctx context.Context, req *pb.ReqGetUserTrashB
 	Dir := []*biz.UserDirectory{}
 	sortName := req.SortObject
 	sortType := req.SortType
-	err = t.data.db.Model(&biz.UserDirectory{}).Where("user_id = ? and dir_status = ?", id, DEL).Find(&Dir).Error
+	err = t.data.Db.Model(&biz.UserDirectory{}).Where("user_id = ? and dir_status = ?", id, DEL).Find(&Dir).Error
 	if err != nil && err.Error() != "record not found" {
 		return res, ecode.MYSQL_ERR.SetMessage(err.Error())
 	}
@@ -701,7 +752,7 @@ doit:
 		}
 	}
 
-	err = t.data.db.Raw("select * from d_storage.files f where file_status  = 2 and id in "+
+	err = t.data.Db.Raw("select * from d_storage.files f where file_status  = 2 and id in "+
 		"(select id from d_storage.user_files uf where uf.user_id = ?) and directory_id not in "+
 		"(select id from d_storage.user_directories ud where ud.dir_status =2 and ud.user_id = ? );",
 		id, id).Scan(&File).Error
@@ -797,13 +848,13 @@ func (t *transferRepo) DeleteFile(ctx context.Context, req *pb.ReqDeleteFile) (*
 	dids := []int{}
 	files := []*biz.File{}
 	if len(req.Fid) != 0 {
-		err = t.data.db.Model(&biz.File{}).Where("id in (?)  and file_status = ?", req.Fid, EXIST).Find(&files).Error
+		err = t.data.Db.Model(&biz.File{}).Where("id in (?)  and file_status = ?", req.Fid, EXIST).Find(&files).Error
 		if err != nil {
 			return res, ecode.MYSQL_ERR.SetMessage(err.Error())
 		}
 	}
 
-	client := t.data.minio_internal
+	client := t.data.Minio_internal
 	for _, v := range files {
 		src := minio.CopySrcOptions{
 			Bucket: PRIVATE,
@@ -831,7 +882,7 @@ func (t *transferRepo) DeleteFile(ctx context.Context, req *pb.ReqDeleteFile) (*
 	//没办法了
 	dirs := []*biz.UserDirectory{}
 	//找到当前目录的文件夹
-	err = t.data.db.Model(&biz.UserDirectory{}).Where("id in (?) and user_id =?", dids, id).Find(&dirs).Error
+	err = t.data.Db.Model(&biz.UserDirectory{}).Where("id in (?) and user_id =?", dids, id).Find(&dirs).Error
 	if err != nil {
 		return res, ecode.MYSQL_ERR
 	}
@@ -860,7 +911,7 @@ func (t *transferRepo) DeleteFile(ctx context.Context, req *pb.ReqDeleteFile) (*
 		sizeMap[v.ID] = sizeCount
 		sizeCount = 0
 	}
-	tx := t.data.db.Begin()
+	tx := t.data.Db.Begin()
 	err = tx.Model(&biz.UserDirectory{}).Save(&dirs).Error
 	if err != nil {
 		tx.Rollback()
@@ -881,7 +932,7 @@ func (t *transferRepo) DeleteFile(ctx context.Context, req *pb.ReqDeleteFile) (*
 	}
 
 	for k, v := range pathMap {
-		err = t.data.db.Raw("update d_storage.user_directories ud set ud.size = ud.size - ? where id in(?) and user_id = ?",
+		err = t.data.Db.Raw("update d_storage.user_directories ud set ud.size = ud.size - ? where id in(?) and user_id = ?",
 			sizeMap[k], v, id).Error
 		if err != nil {
 			return res, ecode.MYSQL_ERR.SetMessage(err.Error())
@@ -900,7 +951,7 @@ func (t *transferRepo) DeleteDir(ctx context.Context, req *pb.ReqDeleteDir) (*pb
 	//找到文件夹下的子目录
 	dirMap := make(map[int][]*biz.UserDirectory)
 	if len(req.Did) != 0 {
-		err = t.data.db.Model(&biz.UserDirectory{}).Where("id in (?) and user_id= ? and dir_status = ?", req.Did, id, EXIST).Find(&dirs).Error
+		err = t.data.Db.Model(&biz.UserDirectory{}).Where("id in (?) and user_id= ? and dir_status = ?", req.Did, id, EXIST).Find(&dirs).Error
 		if err != nil {
 			return res, ecode.MYSQL_ERR.SetMessage(err.Error())
 		}
@@ -913,7 +964,7 @@ func (t *transferRepo) DeleteDir(ctx context.Context, req *pb.ReqDeleteDir) (*pb
 
 	for _, v := range dirs {
 
-		err = t.data.db.Raw(
+		err = t.data.Db.Raw(
 			"select * from  user_directories a "+
 				"left join(select path_tree from user_directories d where d.path_tree like ? and user_id = ?)b "+
 				"on a.path_tree=b.path_tree where b.path_tree is not null ", "%"+strconv.Itoa(v.ID)+"/%",id).Scan(&childDir).Error
@@ -933,7 +984,7 @@ func (t *transferRepo) DeleteDir(ctx context.Context, req *pb.ReqDeleteDir) (*pb
 	for _, dirs := range dirMap {
 		for _, dir := range dirs {
 			files := []*biz.File{}
-			err = t.data.db.Model(&biz.File{}).Where("directory_id = ? and file_status = ?", dir.ID, EXIST).Find(&files).Error
+			err = t.data.Db.Model(&biz.File{}).Where("directory_id = ? and file_status = ?", dir.ID, EXIST).Find(&files).Error
 			if err != nil && err.Error() != "record not found" {
 				return res, ecode.MYSQL_ERR.SetMessage(err.Error())
 			}
@@ -946,7 +997,7 @@ func (t *transferRepo) DeleteDir(ctx context.Context, req *pb.ReqDeleteDir) (*pb
 		}
 	}
 	saveFile := []*biz.File{}
-	client := t.data.minio_internal
+	client := t.data.Minio_internal
 	for _, files := range fileMap {
 		for _, file := range files {
 			src := minio.CopySrcOptions{
@@ -972,7 +1023,7 @@ func (t *transferRepo) DeleteDir(ctx context.Context, req *pb.ReqDeleteDir) (*pb
 			saveFile = append(saveFile, file)
 		}
 	}
-	tx := t.data.db.Begin()
+	tx := t.data.Db.Begin()
 	if len(saveFile) != 0 {
 		err = tx.Model(&biz.File{}).Save(&saveFile).Error
 		if err != nil {
@@ -997,7 +1048,7 @@ func (t *transferRepo) DeleteDir(ctx context.Context, req *pb.ReqDeleteDir) (*pb
 	}
 
 	for k, v := range pathMap {
-		err = t.data.db.Raw("update d_storage.user_directories ud set ud.size = ud.size - ? where name in(?) and user_id = ?",
+		err = t.data.Db.Raw("update d_storage.user_directories ud set ud.size = ud.size - ? where name in(?) and user_id = ?",
 			dirSizeMap[k], v, id).Error
 		if err != nil {
 			return res, ecode.MYSQL_ERR.SetMessage(err.Error())
@@ -1016,12 +1067,12 @@ func (t *transferRepo) WithDrawFile(ctx context.Context, req *pb.ReqWithDrawFile
 	dids := []int{}
 	files := []*biz.File{}
 	if len(req.Fid) != 0 {
-		err = t.data.db.Model(&biz.File{}).Where("id in (?)  and file_status = ?", req.Fid, DEL).Find(&files).Error
+		err = t.data.Db.Model(&biz.File{}).Where("id in (?)  and file_status = ?", req.Fid, DEL).Find(&files).Error
 		if err != nil {
 			return res, ecode.MYSQL_ERR.SetMessage(err.Error())
 		}
 	}
-	client := t.data.minio_internal
+	client := t.data.Minio_internal
 	for _, v := range files {
 		src := minio.CopySrcOptions{
 			Bucket: DELETE,
@@ -1047,7 +1098,7 @@ func (t *transferRepo) WithDrawFile(ctx context.Context, req *pb.ReqWithDrawFile
 	}
 	dids = util.UniqueIntArr(dids)
 	dirs := []*biz.UserDirectory{}
-	err = t.data.db.Model(&biz.UserDirectory{}).Where("id in (?) and user_id =?", dids, id).Find(&dirs).Error
+	err = t.data.Db.Model(&biz.UserDirectory{}).Where("id in (?) and user_id =?", dids, id).Find(&dirs).Error
 	if err != nil {
 		return res, ecode.MYSQL_ERR
 	}
@@ -1076,7 +1127,7 @@ func (t *transferRepo) WithDrawFile(ctx context.Context, req *pb.ReqWithDrawFile
 		sizeCount = 0
 	}
 
-	tx := t.data.db.Begin()
+	tx := t.data.Db.Begin()
 	err = tx.Model(&biz.UserDirectory{}).Save(&dirs).Error
 	if err != nil {
 		tx.Rollback()
@@ -1095,7 +1146,7 @@ func (t *transferRepo) WithDrawFile(ctx context.Context, req *pb.ReqWithDrawFile
 	}
 
 	for k, v := range pathMap {
-		err = t.data.db.Raw("update d_storage.user_directories ud set ud.size = ud.size + ? where id in(?) and user_id = ?",
+		err = t.data.Db.Raw("update d_storage.user_directories ud set ud.size = ud.size + ? where id in(?) and user_id = ?",
 			sizeMap[k], v, id).Error
 		if err != nil {
 			return res, ecode.MYSQL_ERR.SetMessage(err.Error())
@@ -1114,7 +1165,7 @@ func (t *transferRepo) WithDrawDir(ctx context.Context, req *pb.ReqWithDrawDir) 
 	//找到文件夹下的子目录
 	dirMap := make(map[int][]*biz.UserDirectory)
 	if len(req.Did) != 0 {
-		err = t.data.db.Model(&biz.UserDirectory{}).Where("id in (?) and user_id= ? and dir_status = ?", req.Did, id, DEL).Find(&dirs).Error
+		err = t.data.Db.Model(&biz.UserDirectory{}).Where("id in (?) and user_id= ? and dir_status = ?", req.Did, id, DEL).Find(&dirs).Error
 		if err != nil {
 			return res, ecode.MYSQL_ERR.SetMessage(err.Error())
 		}
@@ -1126,7 +1177,7 @@ func (t *transferRepo) WithDrawDir(ctx context.Context, req *pb.ReqWithDrawDir) 
 	childDir := []*biz.UserDirectory{}
 
 	for _, v := range dirs {
-		err = t.data.db.Raw(
+		err = t.data.Db.Raw(
 			"select * from  user_directories a "+
 				"left join(select path_str from user_directories d where d.path_tree like ? and d.father_id =?)b "+
 				"on a.path_tree=b.path_tree where b.path_str is not null", "%"+strconv.Itoa(v.ID)+"/%", v.FatherId).Scan(&childDir).Error
@@ -1145,7 +1196,7 @@ func (t *transferRepo) WithDrawDir(ctx context.Context, req *pb.ReqWithDrawDir) 
 	for _, dirs := range dirMap {
 		for _, dir := range dirs {
 			files := []*biz.File{}
-			err = t.data.db.Model(&biz.File{}).Where("directory_id = ? and file_status = ?", dir.ID, DEL).Find(&files).Error
+			err = t.data.Db.Model(&biz.File{}).Where("directory_id = ? and file_status = ?", dir.ID, DEL).Find(&files).Error
 			if err != nil && err.Error() != "record not found" {
 				return res, ecode.MYSQL_ERR.SetMessage(err.Error())
 			}
@@ -1159,7 +1210,7 @@ func (t *transferRepo) WithDrawDir(ctx context.Context, req *pb.ReqWithDrawDir) 
 	}
 	saveFile := []*biz.File{}
 
-	client := t.data.minio_internal
+	client := t.data.Minio_internal
 	for _, files := range fileMap {
 		for _, file := range files {
 			src := minio.CopySrcOptions{
@@ -1187,7 +1238,7 @@ func (t *transferRepo) WithDrawDir(ctx context.Context, req *pb.ReqWithDrawDir) 
 		}
 	}
 
-	tx := t.data.db.Begin()
+	tx := t.data.Db.Begin()
 	if len(saveFile) != 0 {
 		err = tx.Model(&biz.File{}).Save(&saveFile).Error
 		if err != nil {
@@ -1210,7 +1261,7 @@ func (t *transferRepo) WithDrawDir(ctx context.Context, req *pb.ReqWithDrawDir) 
 	}
 
 	for k, v := range pathMap {
-		err = t.data.db.Raw("update d_storage.user_directories ud set ud.size = ud.size + ? where id in(?) and user_id = ?",
+		err = t.data.Db.Raw("update d_storage.user_directories ud set ud.size = ud.size + ? where id in(?) and user_id = ?",
 			dirSizeMap[k], v, id).Error
 		if err != nil {
 			return res, ecode.MYSQL_ERR.SetMessage(err.Error())
@@ -1228,13 +1279,13 @@ func (t *transferRepo) CleanTrashFile(ctx context.Context, req *pb.ReqCleanTrash
 
 	files := []*biz.File{}
 	if len(req.Fid) != 0 {
-		err = t.data.db.Model(&biz.File{}).Where("id in (?) and file_status = ?", req.Fid, DEL).Find(&files).Error
+		err = t.data.Db.Model(&biz.File{}).Where("id in (?) and file_status = ?", req.Fid, DEL).Find(&files).Error
 		if err != nil {
 			return res, ecode.MYSQL_ERR.SetMessage(err.Error())
 		}
 	}
 
-	client := t.data.minio_internal
+	client := t.data.Minio_internal
 	//var sizeCut int64
 	for _, v := range files {
 		ropt := minio.RemoveObjectOptions{
@@ -1249,7 +1300,7 @@ func (t *transferRepo) CleanTrashFile(ctx context.Context, req *pb.ReqCleanTrash
 	}
 
 	//tx := t.data.db
-	err = t.data.db.Model(&biz.File{}).Save(&files).Error
+	err = t.data.Db.Model(&biz.File{}).Save(&files).Error
 	if err != nil {
 		return res, ecode.MYSQL_ERR.SetMessage(err.Error())
 	}
@@ -1266,7 +1317,7 @@ func (t *transferRepo) CleanTrashDir(ctx context.Context, req *pb.ReqCleanTrashD
 	//找到文件夹下的子目录
 	dirMap := make(map[int][]*biz.UserDirectory)
 	if len(req.Did) != 0 {
-		err = t.data.db.Model(&biz.UserDirectory{}).Where("id in (?) user_id= ? and dir_status = ?", req.Did, id, DEL).Find(&dirs).Error
+		err = t.data.Db.Model(&biz.UserDirectory{}).Where("id in (?) user_id= ? and dir_status = ?", req.Did, id, DEL).Find(&dirs).Error
 		if err != nil {
 			return res, ecode.MYSQL_ERR.SetMessage(err.Error())
 		}
@@ -1274,7 +1325,7 @@ func (t *transferRepo) CleanTrashDir(ctx context.Context, req *pb.ReqCleanTrashD
 	childDir := []*biz.UserDirectory{}
 
 	for _, v := range dirs {
-		err = t.data.db.Raw(
+		err = t.data.Db.Raw(
 			"select * from  user_directories a "+
 				"left join(select path_str from user_directories d where d.path_tree like ?)b "+
 				"on a.path_tree=b.path_tree where b.path_str is not null", "%"+strconv.Itoa(v.ID)+"/%").Scan(&childDir).Error
@@ -1291,7 +1342,7 @@ func (t *transferRepo) CleanTrashDir(ctx context.Context, req *pb.ReqCleanTrashD
 	for _, dirs := range dirMap {
 		for _, dir := range dirs {
 			files := []*biz.File{}
-			err = t.data.db.Model(&biz.File{}).Where("directory_id = ? and file_status = ?", dir.ID, DEL).Find(&files).Error
+			err = t.data.Db.Model(&biz.File{}).Where("directory_id = ? and file_status = ?", dir.ID, DEL).Find(&files).Error
 			if err != nil && err.Error() != "record not found" {
 				return res, ecode.MYSQL_ERR.SetMessage(err.Error())
 			}
@@ -1304,7 +1355,7 @@ func (t *transferRepo) CleanTrashDir(ctx context.Context, req *pb.ReqCleanTrashD
 		}
 	}
 	saveFile := []*biz.File{}
-	client := t.data.minio_internal
+	client := t.data.Minio_internal
 	for _, files := range fileMap {
 		for _, file := range files {
 			ropt := minio.RemoveObjectOptions{
@@ -1319,7 +1370,7 @@ func (t *transferRepo) CleanTrashDir(ctx context.Context, req *pb.ReqCleanTrashD
 		}
 	}
 
-	tx := t.data.db.Begin()
+	tx := t.data.Db.Begin()
 	err = tx.Model(&biz.File{}).Save(&saveFile).Error
 	if err != nil {
 		tx.Rollback()
@@ -1343,12 +1394,12 @@ func (t *transferRepo) ShareFile(ctx context.Context, req *pb.ReqShareFileStr) (
 	//claims := ctx.Value("claims").(*middleware.Claims)
 	var err error
 	userfile := &biz.UserFile{}
-	err = t.data.db.Model(&biz.UserFile{}).Where("user_id = ? and file_id = ?", id, req.Fid).Find(userfile).Error
+	err = t.data.Db.Model(&biz.UserFile{}).Where("user_id = ? and file_id = ?", id, req.Fid).Find(userfile).Error
 	if err != nil {
 		return res, ecode.MYSQL_ERR.SetMessage(err.Error())
 	}
 	file := &biz.File{}
-	err = t.data.db.Model(&biz.File{}).Where("id = ?", userfile.FileId).Find(file).Error
+	err = t.data.Db.Model(&biz.File{}).Where("id = ?", userfile.FileId).Find(file).Error
 	if err != nil {
 		return res, ecode.MYSQL_ERR.SetMessage(err.Error())
 	}
@@ -1384,7 +1435,7 @@ func (t *transferRepo) ShareFile(ctx context.Context, req *pb.ReqShareFileStr) (
 		FileName:   file.FileName,
 		FileSize:   file.FileSize,
 	}
-	err = t.data.db.Model(&biz.ShareHistory{}).Create(newHistory).Error
+	err = t.data.Db.Model(&biz.ShareHistory{}).Create(newHistory).Error
 	if err != nil {
 		return res, ecode.MYSQL_ERR.SetMessage(err.Error())
 	}
@@ -1399,7 +1450,7 @@ func (t *transferRepo) PreviewFile(ctx context.Context, req *pb.ReqPreviewFile) 
 
 	}
 	userFile := &biz.UserFile{}
-	err = t.data.db.Model(&biz.UserFile{}).Where("user_id = ? and file_id = ?", id, req.Fid).First(userFile).Error
+	err = t.data.Db.Model(&biz.UserFile{}).Where("user_id = ? and file_id = ?", id, req.Fid).First(userFile).Error
 	if err != nil {
 		return res, ecode.MYSQL_ERR
 	}
@@ -1407,7 +1458,7 @@ func (t *transferRepo) PreviewFile(ctx context.Context, req *pb.ReqPreviewFile) 
 		return res, ecode.MYSQL_ERR.SetMessage("找不到此文件")
 	}
 	File := &biz.File{}
-	err = t.data.db.Model(&biz.File{}).Where("id = ?", req.Fid).First(File).Error
+	err = t.data.Db.Model(&biz.File{}).Where("id = ?", req.Fid).First(File).Error
 	if err != nil {
 		return res, ecode.MYSQL_ERR
 	}
@@ -1434,12 +1485,12 @@ func (t *transferRepo) FileCensus(ctx context.Context, req *pb.ReqFileCensus) (*
 	var err error
 	res := &pb.RespFileCensus{}
 	dirIds := []int{}
-	err = t.data.db.Model(&biz.UserDirectory{}).Where("user_id = ? and dir_status = ?", id, EXIST).Pluck("id", &dirIds).Error
+	err = t.data.Db.Model(&biz.UserDirectory{}).Where("user_id = ? and dir_status = ?", id, EXIST).Pluck("id", &dirIds).Error
 	if err != nil && err.Error() != "record not found" {
 		return res, ecode.MYSQL_ERR.SetMessage(err.Error())
 	}
 	files := []*biz.File{}
-	err = t.data.db.Model(&biz.File{}).
+	err = t.data.Db.Model(&biz.File{}).
 		Where("directory_id in (?) and file_status = ?", dirIds, EXIST).
 		Order("download_count desc").
 		Find(&files).Error
@@ -1475,7 +1526,7 @@ func (t *transferRepo) FileCensus(ctx context.Context, req *pb.ReqFileCensus) (*
 		}
 	}
 	last := float32(total) / float32(1024*1024*1024*10)
-	err = t.data.db.Model(&biz.UserDirectory{}).Where("user_id  = ? and father_id = 0", id).Update("size", total).Error
+	err = t.data.Db.Model(&biz.UserDirectory{}).Where("user_id  = ? and father_id = 0", id).Update("size", total).Error
 	if err != nil {
 		return res, ecode.MYSQL_ERR
 	}
@@ -1512,7 +1563,7 @@ func (t *transferRepo) CreateDir(ctx context.Context, req *pb.ReqCreateDir) (*pb
 	}
 	directory := &biz.UserDirectory{}
 	if id != 0 {
-		err = t.data.db.Model(&biz.UserDirectory{}).Where("user_id =? and father_id=?", id, 0).First(directory).Error
+		err = t.data.Db.Model(&biz.UserDirectory{}).Where("user_id =? and father_id=?", id, 0).First(directory).Error
 		if err != nil && err.Error() != "record not found" {
 			t.log.Error(err)
 			return nil, ecode.MYSQL_ERR
@@ -1524,13 +1575,13 @@ func (t *transferRepo) CreateDir(ctx context.Context, req *pb.ReqCreateDir) (*pb
 			directory.FatherId = 0
 			directory.PathStr = fmt.Sprintf("%s/", claims.UserNum)
 			directory.Key = util.GetRandomDirString(40)
-			err = t.data.db.Model(&biz.UserDirectory{}).Create(directory).Error
+			err = t.data.Db.Model(&biz.UserDirectory{}).Create(directory).Error
 			if err != nil {
 				t.log.Error(err)
 				return nil, ecode.MYSQL_ERR
 			}
 			directory.PathTree = fmt.Sprintf("%d/",directory.ID)
-			err = t.data.db.Model(&biz.UserDirectory{}).Where("id = ?",directory.ID).Save(directory).Error
+			err = t.data.Db.Model(&biz.UserDirectory{}).Where("id = ?",directory.ID).Save(directory).Error
 			if err != nil {
 				t.log.Error(err)
 				return nil, ecode.MYSQL_ERR
@@ -1538,11 +1589,11 @@ func (t *transferRepo) CreateDir(ctx context.Context, req *pb.ReqCreateDir) (*pb
 		}
 	}
 	existCheck := &biz.UserDirectory{}
-	err = t.data.db.Model(&biz.UserDirectory{}).Where("name = ? and user_id = ?", req.DirName, id).First(existCheck).Error
+	err = t.data.Db.Model(&biz.UserDirectory{}).Where("name = ? and user_id = ?", req.DirName, id).First(existCheck).Error
 	if existCheck.ID != 0 {
 		dir := &biz.UserDirectory{}
 		if req.LocDid == 0 {
-			err = t.data.db.Model(&biz.UserDirectory{}).Where("user_id = ? and father_id = ?", id, 0).First(dir).Error
+			err = t.data.Db.Model(&biz.UserDirectory{}).Where("user_id = ? and father_id = ?", id, 0).First(dir).Error
 			if err != nil {
 				return res, ecode.MYSQL_ERR
 			}
@@ -1550,7 +1601,7 @@ func (t *transferRepo) CreateDir(ctx context.Context, req *pb.ReqCreateDir) (*pb
 				return res, ecode.INVALID_PARAM.SetMessage("新建文件夹与当前目录下重名")
 			}
 		} else {
-			err = t.data.db.Model(&biz.UserDirectory{}).Where("id = ?", req.LocDid).First(dir).Error
+			err = t.data.Db.Model(&biz.UserDirectory{}).Where("id = ?", req.LocDid).First(dir).Error
 			if err != nil {
 				return res, ecode.MYSQL_ERR
 			}
@@ -1564,7 +1615,7 @@ func (t *transferRepo) CreateDir(ctx context.Context, req *pb.ReqCreateDir) (*pb
 	if req.LocDid == 0 {
 		dir = directory
 	} else {
-		err = t.data.db.Model(&biz.UserDirectory{}).Where("user_id = ? and id = ?", id, req.LocDid).First(dir).Error
+		err = t.data.Db.Model(&biz.UserDirectory{}).Where("user_id = ? and id = ?", id, req.LocDid).First(dir).Error
 		if err != nil {
 			return res, ecode.MYSQL_ERR
 		}
@@ -1579,12 +1630,12 @@ func (t *transferRepo) CreateDir(ctx context.Context, req *pb.ReqCreateDir) (*pb
 		Key:       util.GetRandomDirString(40),
 	}
 
-	err = t.data.db.Model(&biz.UserDirectory{}).Create(newDir).Error
+	err = t.data.Db.Model(&biz.UserDirectory{}).Create(newDir).Error
 	if err != nil {
 		return res, ecode.MYSQL_ERR
 	}
 	res.Did = int32(newDir.ID)
-	err = t.data.db.Model(&biz.UserDirectory{}).Where("id = ?",newDir.ID).Update("path_tree",fmt.Sprintf("%s%d/",dir.PathTree,newDir.ID)).Error
+	err = t.data.Db.Model(&biz.UserDirectory{}).Where("id = ?",newDir.ID).Update("path_tree",fmt.Sprintf("%s%d/",dir.PathTree,newDir.ID)).Error
 	if err != nil {
 		return res, ecode.MYSQL_ERR
 	}

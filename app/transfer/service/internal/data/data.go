@@ -16,21 +16,20 @@ import (
 	"time"
 )
 
-var ProviderSet = wire.NewSet(NewData, NewTransferRepo)
+var ProviderSet = wire.NewSet(NewData, NewTransferRepo,NewRabbitMqProducer)
 
 // Data .
 type Data struct {
-	cache *redis.Client
-	db  *gorm.DB
-	minio_internal *minio.Client
+	cache          *redis.Client
+	Db             *gorm.DB
+	Minio_internal *minio.Client
 	minio_online   *minio.Client
 	log *log.Helper
 
 }
-
 func NewMinioClientInternal(conf *conf.Data,logger log.Logger) *minio.Client{
 	log := log.NewHelper(log.With(logger, "module", "transfer/data/minio"))
-	client, err := minio.New(conf.Minio.EndPoints, &minio.Options{
+	client, err := minio.New("47.107.95.82:8000", &minio.Options{
 		Creds:        credentials.NewStaticV4(conf.Minio.AccessKeyId,conf.Minio.SecretAccessKey,""),
 		Secure:       false,
 	})
@@ -108,11 +107,11 @@ func NewData(conf *conf.Data,logger log.Logger) (*Data, func(), error) {
 	log := log.NewHelper(log.With(logger, "module", "transfer/data"))
 
 	d := &Data{
-		cache: NewCache(conf,logger),
-		db:  NewDB(conf,logger),
-		minio_internal: NewMinioClientInternal(conf,logger),
-		minio_online: NewMinioClientOnline(conf,logger),
-		log: log,
+		cache:          NewCache(conf,logger),
+		Db:             NewDB(conf,logger),
+		Minio_internal: NewMinioClientInternal(conf,logger),
+		minio_online:   NewMinioClientOnline(conf,logger),
+		log:            log,
 	}
 	return d, func() {
 

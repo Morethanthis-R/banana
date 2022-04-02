@@ -11,7 +11,10 @@ import (
 )
 
 // NewHTTPServer new a HTTP server.
-func NewHTTPServer(c *conf.Server,tf *service.TransferService) *http.Server {
+func NewHTTPServer(c *conf.Server,tf *service.TransferService,mq *service.MqService) *http.Server {
+	go func() {
+		mq.Start()
+	}()
 	engine := gin.Default()
 	engine.Use(middleware.Cors())
 	router.Init(engine,tf)
@@ -21,5 +24,6 @@ func NewHTTPServer(c *conf.Server,tf *service.TransferService) *http.Server {
 	httpSrv := http.NewServer(http.Address(c.Http.Addr), http.Timeout(c.Http.Timeout.AsDuration()))
 	httpSrv.HandlePrefix("/",engine)
 	pprof.Register(engine, "/banana/transfer/debug")
+
 	return httpSrv
 }

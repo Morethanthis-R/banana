@@ -33,6 +33,16 @@ type TType struct {
 	UpdatedAt    int64  `gorm:"autoUpdateAt" json:"updated_at"`
 }
 
+type TAdv struct {
+	ID           int    `gorm:"primary_key" json:"id"`
+	Name         string `gorm:"type:varchar(20) not null" json:"name"`
+	Describe     int8   `gorm:"type:tinyint(5) not null" json:"describe""`
+	LinkUrl      string `gorm:"type:text not null" json:"link_url"`
+	ImageUrl     string `gorm:"type:text not null" json:"image_url"`
+	Status       int8   `gorm:"type:tinyint(5) not null" json:"status"`
+	CreatedAt    int64  `gorm:"autoCreateAt" json:"created_at"`
+	UpdatedAt    int64  `gorm:"autoUpdateAt" json:"updated_at"`
+}
 type CommonRepo interface {
 	CreateNotify(ctx context.Context, rq *pb.ReqCreateNotify) (*pb.RespCreateNotify,error)
 	DeleteNotify(ctx context.Context, rq *pb.ReqDeleteNotify) (*pb.RespDeleteNotify,error)
@@ -42,6 +52,10 @@ type CommonRepo interface {
 	UpdateNType(ctx context.Context,rq *pb.ReqUpdateNotifyType) (*pb.RespUpdateNotifyType,error)
 	DeleteNType(ctx context.Context,rq *pb.ReqDeleteNotifyType) (*pb.RespDeleteNotifyType,error)
 	GetNTypeList(ctx context.Context,rq *pb.ReqGetNotifyTypeList) (*pb.RespGetNotifyTypeList,error)
+	CreateAdv(ctx context.Context,rq *pb.ReqCreateAdv) (*pb.RespCreateAdv,error)
+	UpdateAdv(ctx context.Context,rq *pb.ReqUpdateAdv) (*pb.RespUpdateAdv,error)
+	GetAdvList(ctx context.Context,rq *pb.ReqGetAdvList) (*pb.RespGetAdvList,error)
+	DeleteAdv(ctx context.Context,rq *pb.ReqDeleteAdv) (*pb.RespDeleteAdv,error)
 }
 
 type CommonCase struct {
@@ -78,4 +92,18 @@ func (cm *CommonCase)  DeleteNType(ctx context.Context,rq *pb.ReqDeleteNotifyTyp
 }
 func (cm *CommonCase) GetNTypeList(ctx context.Context,rq *pb.ReqGetNotifyTypeList) (*pb.RespGetNotifyTypeList,error){
 	return cm.repo.GetNTypeList(ctx,rq)
+}
+
+func (cm *CommonCase) CreateAdv(ctx context.Context,rq *pb.ReqCreateAdv) (*pb.RespCreateAdv,error){
+	return cm.repo.CreateAdv(ctx,rq)
+}
+func (cm *CommonCase) DeleteAdv(ctx context.Context,rq *pb.ReqDeleteAdv) (*pb.RespDeleteAdv,error){
+	return cm.repo.DeleteAdv(ctx,rq)
+}
+func (cm *CommonCase) UpdateAdv(ctx context.Context,rq *pb.ReqUpdateAdv) (*pb.RespUpdateAdv,error){
+	return cm.repo.UpdateAdv(ctx,rq)
+}
+
+func (cm *CommonCase) GetAdvList(ctx context.Context,rq *pb.ReqGetAdvList) (*pb.RespGetAdvList,error){
+	return cm.repo.GetAdvList(ctx,rq)
 }

@@ -21,4 +21,10 @@ data:
     dial_timeout: 1s
     read_timeout: 0.2s
     write_timeout: 0.2s
+  mq:
+    user: "admin"
+    password: "123456"
+    host: "47.107.95.82"
+    port: "5672"
+
 

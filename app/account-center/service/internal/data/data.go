@@ -3,6 +3,7 @@ package data
 import (
 	"banana/app/account-center/service/internal/biz"
 	"banana/app/account-center/service/internal/conf"
+	"context"
 	"fmt"
 	//"context"
 	"github.com/go-kratos/kratos/v2/log"
@@ -39,7 +40,7 @@ func NewCache(conf *conf.Data, logger log.Logger) *redis.Client {
 		ReadTimeout:  conf.Redis.ReadTimeout.AsDuration(),
 	}
 	client := redis.NewClient(options)
-	if client == nil{
+	if pong := client.Ping(context.TODO());pong.Err() != nil {
 		log.Fatalf("failed opening connection to redis")
 	}
 	client.AddHook(redisotel.TracingHook{})
@@ -59,7 +60,7 @@ func NewDB(conf *conf.Data, logger log.Logger) *gorm.DB {
 			SlowThreshold:              200 * time.Millisecond,   // Slow SQL threshold
 			LogLevel:                   gormlog.Info,   // Log level
 			IgnoreRecordNotFoundError:  true,          // Ignore ErrRecordNotFound error for logger
-			Colorful:                   true,         // Disable color
+			Colorful:                   true,         //  color
 		},
 	)
 	db, err := gorm.Open(mysql.Open(conf.Database.Source), &gorm.Config{

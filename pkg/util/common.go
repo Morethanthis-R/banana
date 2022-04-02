@@ -99,7 +99,7 @@ func GetRandomDirString(l int) string {
 	return string(result)
 }
 func GetRandomInt(l int)string {
-	str := "0123456789"
+	str := "0123456789QWERTYUIOPASDFGHJKLZXCVBNM"
 	bytes := []byte(str)
 	var result []byte
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))

@@ -1,6 +1,5 @@
 package main
 
-
 import (
 	"banana/app/transfer/service/internal/conf"
 	"flag"
@@ -87,6 +86,7 @@ func main() {
 	}
 
 	app, cleanup, err := initApp(bc.Server, &rc,bc.Data, logger)
+
 	if err != nil {
 		panic(err)
 	}
@@ -96,5 +96,6 @@ func main() {
 	if err := app.Run(); err != nil {
 		panic(err)
 	}
+
 }
 

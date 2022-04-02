@@ -250,13 +250,7 @@ func GuestUpload (c *gin.Context) {
 	}
 
 
-	//type params struct {
-	//	ExpireTime int64 `form:"expire_time"`
-	//}
-	//query := &params{}
-	//if err := c.BindQuery(query);err != nil {
-	//	response.NewErrWithCodeAndMsg(c, 200, err.Error())
-	//}
+
 	fid := []int32{}
 	for k, v := range fileMap {
 		f,err := os.Open(k)
@@ -272,11 +266,12 @@ func GuestUpload (c *gin.Context) {
 		}
 		res, err := transferService.GuestUpload(c, req)
 		if err != nil {
+
 			response.NewErrWithCodeAndMsg(c, 200, err.Error())
 			return
 		}
 		fid = append(fid,res.Fid)
-		os.Remove(k)
+
 	}
 	//
 	response.NewSuccess(c, gin.H{
@@ -352,13 +347,6 @@ func UploadHandler(c *gin.Context) {
 		}
 	}
 
-	//directroy:=c.Request.Header.Get("Directory")
-	//if directroy!= ""{
-	//	if strings.Contains(directroy,"_") ==true{
-	//		response.NewErrWithCodeAndMsg(c, 200, "非法路径，路径包含字符\"_\"")
-	//		return
-	//	}
-	//}
 	did := c.Query("did")
 	dirId ,_:=strconv.Atoi(did)
 
@@ -367,8 +355,10 @@ func UploadHandler(c *gin.Context) {
 		f.Seek(0, 0)
 		filehash := util.FileSha1(f)
 		f.Seek(0, 0)
+		info ,_:= f.Stat()
 		req := &pb.ReqUpload{
 			File: &pb.File{
+				Filesize: info.Size(),
 				Filename: k,
 				FileHash: filehash,
 				ContentType: v,
@@ -376,7 +366,6 @@ func UploadHandler(c *gin.Context) {
 			Did: int32(dirId),
 		}
 		res, err := transferService.UploadEntry(c, req)
-		os.Remove(k)
 		if err != nil {
 			response.NewErrWithCodeAndMsg(c, 200, err.Error())
 			return

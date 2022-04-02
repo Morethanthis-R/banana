@@ -2,8 +2,8 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    workload.user.cattle.io/workloadselector: peach-transfer-svc
-  name: transfer-svc
+    workload.user.cattle.io/workloadselector: peach-common-svc
+  name: common-svc
   namespace: develop
 spec:
   minReadySeconds: 5
@@ -12,7 +12,7 @@ spec:
   revisionHistoryLimit: 10
   selector:
     matchLabels:
-      workload.user.cattle.io/workloadselector: peach-transfer-svc
+      workload.user.cattle.io/workloadselector: peach-common-svc
   strategy:
     rollingUpdate:
       maxSurge: 1
@@ -21,15 +21,15 @@ spec:
   template:
     metadata:
       labels:
-        workload.user.cattle.io/workloadselector: peach-transfer-svc
+        workload.user.cattle.io/workloadselector: peach-common-svc
     spec:
       containers:
         - env:
             - name: GIN_MODE
               value: debug
-          image: registry.cn-shenzhen.aliyuncs.com/morethanthis/peach:transfer-v1
+          image: registry.cn-shenzhen.aliyuncs.com/morethanthis/peach:common-v1
           imagePullPolicy: Always
-          name: transfer-svc
+          name: common-svc
           resources:
             limits:
               cpu: 500m
@@ -56,7 +56,7 @@ kind: Service
 metadata:
   labels:
     cattle.io/creator: norman
-  name: transfer-svc
+  name: common-svc
   namespace: develop
 spec:
   ports:
@@ -69,7 +69,7 @@ spec:
       protocol: TCP
       targetPort: 5000
   selector:
-    workload.user.cattle.io/workloadselector: peach-transfer-svc
+    workload.user.cattle.io/workloadselector: peach-common-svc
   sessionAffinity: None
   type: ClusterIP
 status:
@@ -102,7 +102,7 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: transfer-svc
+                name: common-svc
                 port:
                   number: 9530
   # tls:

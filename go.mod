@@ -19,6 +19,7 @@ require (
 	github.com/minio/minio-go/v7 v7.0.21
 	github.com/pkg/errors v0.9.1
 	github.com/shopspring/decimal v1.3.1
+	github.com/streadway/amqp v1.0.0
 	golang.org/x/crypto v0.0.0-20201216223049-8b5274cf687f
 	google.golang.org/genproto v0.0.0-20211223182754-3ac035c7e7cb
 	google.golang.org/grpc v1.43.0

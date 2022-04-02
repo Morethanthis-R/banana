@@ -8,7 +8,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"strconv"
 )
-
 var accountService *service.AccountCenterService
 
 func apiV1(group gin.IRoutes, ac *service.AccountCenterService) {

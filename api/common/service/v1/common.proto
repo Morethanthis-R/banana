@@ -42,20 +42,64 @@ service Common{
 
   }
 
-//  rpc CreateOrder(ReqCreateOrder) returns (RespCreateOrder){
-//
-//  }
-//  rpc UnifiedOrder() returns(){
-//
-//  }
-//  rpc GetOrderList(ReqGetOrderList) returns (RespGetOrderList) {
-//
-//  }
-//
-//  rpc CreatePayment(ReqCreatePayment) returns (RespCreatePayment){
-//
-//  }
+  rpc CreateAdv(ReqCreateAdv) returns (RespCreateAdv) {
 
+  }
+
+  rpc DeleteAdv(ReqDeleteAdv) returns (RespDeleteAdv) {
+
+  }
+
+  rpc UpdateAdv(ReqUpdateAdv) returns (RespUpdateAdv) {
+
+  }
+
+  rpc GetAdvList(ReqGetAdvList) returns (RespGetAdvList){
+
+  }
+}
+
+message ReqCreateAdv{
+  string image_url = 1;
+  string name = 2;
+  int32 describe = 3;
+  string link_url = 4;
+}
+message RespCreateAdv{
+  int32 aid = 1;
+}
+
+message ReqDeleteAdv{
+  int32 aid = 1;
+}
+message RespDeleteAdv{
+  int32 aid = 1;
+}
+
+message ReqUpdateAdv {
+  int32  aid = 1;
+  string name = 2;
+  int32 describe = 3;
+  string link_url = 4;
+  string image_url = 5;
+}
+message RespUpdateAdv{
+  int32 aid = 1;
+}
+
+message AdvObject {
+  int32 aid = 1;
+  string name = 2;
+  int32 describe = 3;
+  string link_url = 4;
+  string image_url = 5;
+}
+message ReqGetAdvList{
+  int32 aid = 1;
+}
+
+message RespGetAdvList{
+  repeated AdvObject adv_object = 1;
 }
 
 message ReqCreateNotify {

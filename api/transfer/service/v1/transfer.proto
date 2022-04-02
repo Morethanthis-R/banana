@@ -84,14 +84,19 @@ message ReqGetCodeDownLoad {
 }
 message RespGetCOdeDownload {
   string download_str = 1;
+  string title =2;
+  string describe =3;
+  int64 expire_time =4;
+  int64 create_time =5;
+  string file_size =7;
+  string file_name =8;
 }
 message ReqGuestUpload {
-  int64 expire_time = 1;
   File file = 2;
 }
 
 message RespGuestUpload {
-  string get_code = 1;
+  int32 fid = 1;
 }
 message ReqCreateDir {
   int32 loc_did = 1;
@@ -155,6 +160,8 @@ message RespFileCensus{
 message ReqShareFileStr{
   int32 fid = 1;
   int64 expire_time = 2;
+  string describe =3;
+  string title = 4;
 }
 
 message RespShareFileStr{
@@ -173,10 +180,12 @@ message File {
   string filename = 1;
   string content_type =2;
   string fileHash = 3;
+  int64  filesize = 4;
 }
 message ReqUpload {
   File file = 1;
-  string directory = 2; //默认根目录  为"" 增加路径填写 /xxx/xxx
+  //string directory = 2; //默认根目录  为"" 增加路径填写 /xxx/xxx
+  int32 did = 2;
 }
 
 message RespUpload {
@@ -234,8 +243,15 @@ message RespGetUserFileTree {
   int32 total =2;
   repeated FileMetaObject file_object = 3;
   repeated DirMetaObject dir_object = 4;
+  repeated int32 fids = 5;
+  repeated int32 dids = 6;
+  int32 loc_id = 7;
+  repeated DirFileNameAndId dir_name_id = 8;
 }
-
+message DirFileNameAndId{
+  int32 did = 1;
+  string name =2;
+}
 message ReqGetUserTrashBin {
   int32 sort_object = 1; //0:默认排序 1:文件名长短 2:编辑时间 4:文件大小
   int32 sort_type = 2; //0:系统默认 1:asc升序  2:desc降序
@@ -246,6 +262,8 @@ message RespGetUserTrashBin {
   int32 total =2;
   repeated FileMetaObject file_object = 3;
   repeated DirMetaObject dir_object = 4;
+  repeated int32 fids = 5;
+  repeated int32 dids = 6;
 }
 message ReqDeleteFile {
   repeated int32 fid = 1;

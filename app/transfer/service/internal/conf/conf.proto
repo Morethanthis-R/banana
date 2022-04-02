@@ -50,14 +50,16 @@ message Data {
         string access_key_id = 2;
         string secret_access_key = 3;
     }
-    message Nsq {
-        string Host = 1;
-        string Port = 2;
+    message Mq {
+        string host = 1;
+        string port = 2;
+        string user = 3;
+        string password = 4;
     }
     Database database = 1;
     Redis    redis    = 2;
     Minio    minio    = 3;
-    Nsq      nsq      = 4;
+    Mq       mq      =  4;
 }
 
 message Registry {
